@@ -10,7 +10,7 @@ Notes / TODO:
 * No support for specials (like ., \w, \d) or Selection ranges ([X-Y])
 
 Features:
-* Supports regular text and escaped specials
+* Supports regular text and escaped syntax
 * Supports the +, *, ?, and {} repitition characters
 * Supports [] and () groups (mostly) with repitition
 
