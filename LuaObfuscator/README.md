@@ -1,4 +1,4 @@
-# LuaExecutor
+# LuaObfuscator
 
 These scripts allow any lua script to be parsed and turned into a string that can be executed in Lua. Main intention of the script is to function as an obfuscator. Note that there are *no* especially fancy tricks applied here, and it isn't incredibly difficult to reverse engineer a script obfuscated using this back into its original state. If it gets deobfuscated, your only solution is to just deal with it.
 
