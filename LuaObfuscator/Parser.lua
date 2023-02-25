@@ -1399,7 +1399,7 @@ local serializer = (function()
 			elseif type(obj) == "string" then
 				Output:Write(TYPE_STRING,TYPE_WIDTH)
 				obj = string.gsub(obj,"\\","\\\\")
-				obj = string.gsub(obj,"\0","\\0") --Escape non-terminators
+				obj = string.gsub(obj,"%z","\\0") --Escape non-terminators
 				Output:WriteString(obj)
 				Output:Write(0,8) --Null terminator
 			elseif type(obj) == "number" then
