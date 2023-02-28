@@ -23,7 +23,3 @@ This script is purely made by me, and parses the output given by Parser.lua. It 
 #### ExecutorMinified.lua
 
 A minified version of the executor, specifically used for the idea of obfuscation purposes. Pop the execution string in the `[=[]=]`. Same as the Executor, so nothing to really say here.
-
-### StudioTools.rbxmx
-
-A model designed to be imported into roblox studio under ServerScriptService, which comes with everything needed to use the obfuscator. Copy Init's text and run it in the Command Bar, then do `_G._O.[Command]` to run a function. You can read the script to find out what it does.

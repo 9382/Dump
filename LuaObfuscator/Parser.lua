@@ -1474,11 +1474,6 @@ local UnOpToID = {
 	["-"]=1, ["not"]=2, ["#"]=3
 }
 
-local s,p = ParseLua([===[
--- CODE HERE
-]===])
-print("s=",s)
-
 local checked = {}
 local uniqueKeys = {}
 local function AssignKey(t,k,n)
@@ -1529,7 +1524,7 @@ local function deepModify(t)
 		end
 	end
 
-	--Obscure naming
+	--Numerical naming (it's nicer on the serializer's size)
 	AssignKey(t,"Name",0)
 	AssignKey(t,"Body",1)
 	AssignKey(t,"Index",2)
@@ -1560,7 +1555,9 @@ local function deepModify(t)
 	--27 = Type
 	AssignKey(t,"Key",28)
 	AssignKey(t,"Data",29)
-	AssignKey(t,"Constant",30)
+	if t.Constant ~= nil then --Override string form containing surrounding quotes with the constant
+		AssignKey(t,"Constant",29)
+	end
 
 	--Fake data
 	if math.random(1,12) == 1 and HasAstType then
@@ -1581,6 +1578,14 @@ local function deepModify(t)
 		end
 	end
 end
-deepModify(p)
 
-print(serializer(p))
+return function(C)
+	local s,p = ParseLua(C)
+	if not s then
+		warn("Failed to parse the lua - "..p)
+		return false,p
+	end
+
+	deepModify(p)
+	return true, serializer(p)
+end

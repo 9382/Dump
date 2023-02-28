@@ -33,7 +33,7 @@ local function CreateExecutionLoop(ast)
 		function scope:SL(name, value)
 			local l = scope:GL(name)
 			if not l then
-				Error("Bad SL "..Tostring(name))
+				Error("Bad SL "..Tostring(name)) --Caused by self bad practices - can't be the result of bad input
 			end
 			l[16] = value
 		end
@@ -77,15 +77,17 @@ local function CreateExecutionLoop(ast)
 		end
 		AmbiguityTracker[t] = {data[1]+1, iterateIndex}
 	end
+
 	executeExpression = function(expr, scope, SpecialState)
-		if expr[7] == 2 then
+		local AstType = expr[7]
+		if AstType == 2 then
 			if SpecialState then
 				return expr, True
 			else
 				local LocalDefinition = scope:GL(expr[0])
 				if not LocalDefinition then
 					if expr[17] then
-						Error("Expected '" .. Tostring(expr[0]) .. "' was missing")
+						Error("Expected '" .. Tostring(expr[0]) .. "' was missing") --Likely an us fault, not a user fault
 					end
 				else
 					return LocalDefinition[16]
@@ -93,19 +95,19 @@ local function CreateExecutionLoop(ast)
 				return FunctionEnvironment[expr[0]]
 			end
 
-		elseif expr[7] == 8 then
+		elseif AstType == 8 then
 			return Tonumber(expr[16][29])
 
-		elseif expr[7] == 9 then
-			return expr[16][30]
+		elseif AstType == 9 then
+			return expr[16][29]
 
-		elseif expr[7] == 11 then
+		elseif AstType == 11 then
 			return expr[16]
 
-		elseif expr[7] == 10 then
+		elseif AstType == 10 then
 			return Nil
 
-		elseif expr[7] == 15 then
+		elseif AstType == 15 then
 			local Lhs = executeExpression(expr[8], scope)
 			local Rhs = executeExpression(expr[9], scope)
 			local op = expr[12]
@@ -141,7 +143,7 @@ local function CreateExecutionLoop(ast)
 				return Lhs or Rhs
 			end
 
-		elseif expr[7] == 14 then
+		elseif AstType == 14 then
 			local Rhs = executeExpression(expr[9], scope)
 			local op = expr[12]
 			if op == 1 then
@@ -152,30 +154,30 @@ local function CreateExecutionLoop(ast)
 				return #Rhs
 			end
 
-		elseif expr[7] == 12 then
+		elseif AstType == 12 then
 			return Unpack(scope:GL("...")[16])
 
-		elseif expr[7] == 5 or
-		expr[7] == 7 or
-		expr[7] == 6 then
+		elseif AstType == 5 or
+		AstType == 7 or
+		AstType == 6 then
 			local args = {}
 			for _, arg in Pairs(expr[3]) do
-				if expr[7] == 6 then
-					args = {arg[30]}
+				if AstType == 6 then
+					args = {arg[29]}
 				else
 					HandleReturnAmbiguity(args, executeExpression(arg, scope))
 				end
 			end
 			return executeExpression(expr[5], scope)(Unpack(args))
 
-		elseif expr[7] == 4 then
+		elseif AstType == 4 then
 			if SpecialState then
 				return expr, True
 			else
 				return executeExpression(expr[5], scope)[executeExpression(expr[2], scope)]
 			end
 
-		elseif expr[7] == 3 then
+		elseif AstType == 3 then
 			if SpecialState then
 				return expr, True
 			else
@@ -194,7 +196,7 @@ local function CreateExecutionLoop(ast)
 				end
 			end
 
-		elseif expr[7] == 1 then
+		elseif AstType == 1 then
 			return function(...)
 				local childScope = CreateExecutionScope(scope)
 				local inputArgs = {...}
@@ -218,11 +220,11 @@ local function CreateExecutionLoop(ast)
 					return Unpack(ReturnData.D)
 				else --Uh oh!
 					local statement = ReturnData.T == 2 and "break" or "continue"
-					Error("You tried to "..statement.." when not in a loop and look at where that landed you. Go think about your actions.")
+					Error("Illegal attempt to "..statement.." the current scope")
 				end
 			end
 
-		elseif expr[7] == 13 then
+		elseif AstType == 13 then
 			local out = {}
 			--Process all key'd entries first
 			for _, entry in Pairs(expr[13]) do
@@ -244,7 +246,8 @@ local function CreateExecutionLoop(ast)
 	end
 
 	local executeStatement = function(statement)
-		if statement[7] == 12 then
+		local AstType = statement[7]
+		if AstType == 12 then
 			local out = {}
 			for i = 1, #statement[9] do
 				HandleReturnAmbiguity(out, executeExpression(statement[9][i], statement.S))
@@ -264,20 +267,19 @@ local function CreateExecutionLoop(ast)
 						local Container = executeExpression(Lhs[5], statement.S)
 						Container[Lhs[4][29]] = Rhs
 
-					elseif Lhs[7] == 4 then
+					else--if Lhs[7] == 4 then
 						local Container = executeExpression(Lhs[5], statement.S)
 						Container[executeExpression(Lhs[2], statement.S)] = Rhs
 
-					else
-						Error("Freaky handle "..Tostring(statement[7]))
+					--It will always be one of the above types. If it's not, thats a serializer error
 					end
 				end
 			end
 
-		elseif statement[7] == 13 then
+		elseif AstType == 13 then
 			executeExpression(statement[21], statement.S)
 
-		elseif statement[7] == 8 then
+		elseif AstType == 8 then
 			local out = {}
 			for i = 1, #statement[15] do
 				HandleReturnAmbiguity(out, executeExpression(statement[15][i], statement.S))
@@ -287,14 +289,14 @@ local function CreateExecutionLoop(ast)
 				statement.S:ML(l[0], out[i])
 			end
 
-		elseif statement[7] == 2 then
+		elseif AstType == 2 then
 			for _, Clause in Pairs(statement[11]) do
 				if not Clause[10] or executeExpression(Clause[10], statement.S) then
 					return executeStatList(Clause[1], CreateExecutionScope(statement.S))
 				end
 			end
 
-		elseif statement[7] == 3 then
+		elseif AstType == 3 then
 			while executeExpression(statement[10], statement.S) do
 				local ReturnData = executeStatList(statement[1], CreateExecutionScope(statement.S))
 				if ReturnData then
@@ -306,23 +308,23 @@ local function CreateExecutionLoop(ast)
 				end
 			end
 
-		elseif statement[7] == 4 then
+		elseif AstType == 4 then
 			return executeStatList(statement[1], CreateExecutionScope(statement.S))
 
-		elseif statement[7] == 9 then
+		elseif AstType == 9 then
 			local arguments = {}
 			for _, arg in Pairs(statement[3]) do
 				HandleReturnAmbiguity(arguments, executeExpression(arg, statement.S))
 			end
 			return arguments
 
-		elseif statement[7] == 10 then
+		elseif AstType == 10 then
 			return True --This just works, ok?
 
-		elseif statement[7] == 11 then
+		elseif AstType == 11 then
 			return False --This too
 
-		elseif statement[7] == 7 then
+		elseif AstType == 7 then
 			repeat
 				local ReturnData = executeStatList(statement[1], CreateExecutionScope(statement.S))
 				if ReturnData then
@@ -334,7 +336,7 @@ local function CreateExecutionLoop(ast)
 				end
 			until executeExpression(statement[10], statement.S)
 
-		elseif statement[7] == 1 then
+		elseif AstType == 1 then
 			local name = statement[0]
 			if name[7] == 3 then
 				if name[6] == False then
@@ -362,7 +364,7 @@ local function CreateExecutionLoop(ast)
 				end
 			end
 
-		elseif statement[7] == 6 then
+		elseif AstType == 6 then
 			local gen1, gen2, gen3
 			local generators = statement[19]
 			if not generators[2] then
@@ -396,7 +398,7 @@ local function CreateExecutionLoop(ast)
 				end
 			end
 
-		elseif statement[7] == 5 then
+		elseif AstType == 5 then
 			local var = Tonumber(executeExpression(statement[23], statement.S))
 			local limit = Tonumber(executeExpression(statement[24], statement.S))
 			local step = statement[25] and Tonumber(executeExpression(statement[25], statement.S)) or 1
@@ -415,8 +417,6 @@ local function CreateExecutionLoop(ast)
 				var = var + step
 			end
 
-		else
-			Error("Had no handle for "..Tostring(statement[7]))
 		end
 	end
 
@@ -448,7 +448,7 @@ local function CreateExecutionLoop(ast)
 				return Tonumber(b,2)
 			end
 			local function ToBit(n,pad)
-				Assert(mathfloor(n) == n,"Can't convert non-int")
+				Assert(mathfloor(n) == n)--,"Can't convert non-int")
 				if n == 0 then
 					return padleft("0",pad or 1,"0")
 				end
@@ -517,7 +517,7 @@ local function CreateExecutionLoop(ast)
 
 			local function Deserialize(NoAssert)
 				if not NoAssert then
-					Assert(Read(TYPE_WIDTH) == TYPE_TABLE_START,"Invalid SD")
+					Assert(Read(TYPE_WIDTH) == TYPE_TABLE_START,"Invalid SD") --Most serializer errors get caught here
 				end
 				local Output = {}
 				local Saved = Nil
@@ -558,8 +558,6 @@ local function CreateExecutionLoop(ast)
 						HandleKVSorting(Read(3))
 					elseif ObjType == TYPE_NUMBER_SIMPLE then
 						HandleKVSorting(Read(5))
-					else
-						Error("Unknown Ot "..Tostring(ObjType).." during DS")
 					end
 				end
 			end
@@ -572,7 +570,7 @@ local function CreateExecutionLoop(ast)
 			return Unpack(ReturnData.D)
 		else --Uh oh!
 			local statement = ReturnData.T == 2 and "break" or "continue"
-			Error("You tried to "..statement.." when not in a loop and look at where that landed you. Go think about your actions.")
+			Error("Illegal attempt to "..statement.." the current scope")
 		end
 	end)
 end
