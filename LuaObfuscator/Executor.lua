@@ -55,13 +55,11 @@ local function CreateExecutionLoop(ast)
 		--Doing this via a function gets around some of the confusion caused when using {...}
 		--This means select cant accidentally trim values inappropriately.
 
-		--Note that the response still has to be sent as a table and later unpacked
-		--This means we could lose trailing nils in some scenarios,
-		--or varargs in a function call (meaning select("#",...) may become unreliable :/)
+		--Note that the response still has to be sent as a table and unpacked sooner or later
+		--For this reason, any table should rely on SafeUnpack instead of Unpack
+		--to avoid unreasonable early trimming of outputs
 
-		--This is still, however, better than the alternative/old implementation of {...}
-
-		--Note that this automatically handles stupid truncation logic, E.g.
+		--This also automatically handles stupid truncation logic how lua does, E.g.
 		---- < local a,b,c,d,e = (function()return 1,2,3,4,5 end)(), (function()return 3 end)(); print(a,b,c,d,e)
 		---- > 1 3 nil nil nil
 		local data = AmbiguityTracker[t] or {1,1}
@@ -76,6 +74,15 @@ local function CreateExecutionLoop(ast)
 			iterateIndex = iterateIndex + 1
 		end
 		AmbiguityTracker[t] = {data[1]+1, iterateIndex}
+	end
+	local function SafeUnpack(t) --Unpack while considering the real length of the table (see above)
+		local TData = AmbiguityTracker[t]
+		if TData then
+			AmbiguityTracker[t] = nil --Clear memory, since we won't need it afterwards
+			return Unpack(t,1,TData[2]-1)
+		else
+			return Unpack(t)
+		end
 	end
 
 	executeExpression = function(expr, scope, SpecialState)
@@ -108,9 +115,15 @@ local function CreateExecutionLoop(ast)
 			return Nil
 
 		elseif AstType == 15 then
-			local Lhs = executeExpression(expr[8], scope)
-			local Rhs = executeExpression(expr[9], scope)
 			local op = expr[12]
+			local Lhs = executeExpression(expr[8], scope)
+			--The RHS should only be evaluated for and/or if the LHS doesn't complete the condition
+			if op == 14 then
+				return Lhs and executeExpression(expr[9], scope)
+			elseif op == 15 then
+				return Lhs or executeExpression(expr[9], scope)
+			end
+			local Rhs = executeExpression(expr[9], scope)
 			if op == 1 then
 				return Lhs + Rhs
 			elseif op == 2 then
@@ -137,10 +150,6 @@ local function CreateExecutionLoop(ast)
 				return Lhs > Rhs
 			elseif op == 13 then
 				return Lhs >= Rhs
-			elseif op == 14 then
-				return Lhs and Rhs
-			elseif op == 15 then
-				return Lhs or Rhs
 			end
 
 		elseif AstType == 14 then
@@ -155,7 +164,7 @@ local function CreateExecutionLoop(ast)
 			end
 
 		elseif AstType == 12 then
-			return Unpack(scope:GL("...")[16])
+			return SafeUnpack(scope:GL("...")[16])
 
 		elseif AstType == 5 or
 		AstType == 7 or
@@ -168,7 +177,7 @@ local function CreateExecutionLoop(ast)
 					HandleReturnAmbiguity(args, executeExpression(arg, scope))
 				end
 			end
-			return executeExpression(expr[5], scope)(Unpack(args))
+			return executeExpression(expr[5], scope)(SafeUnpack(args))
 
 		elseif AstType == 4 then
 			if SpecialState then
@@ -217,7 +226,7 @@ local function CreateExecutionLoop(ast)
 				if not ReturnData then --No return statement to handle
 					return
 				elseif ReturnData.T == 1 then --Get the return data
-					return Unpack(ReturnData.D)
+					return SafeUnpack(ReturnData.D)
 				else --Uh oh!
 					local statement = ReturnData.T == 2 and "break" or "continue"
 					Error("Illegal attempt to "..statement.." the current scope")
@@ -567,7 +576,7 @@ local function CreateExecutionLoop(ast)
 		if not ReturnData then --No return statement to handle
 			return
 		elseif ReturnData.T == 1 then --Get the return data
-			return Unpack(ReturnData.D)
+			return SafeUnpack(ReturnData.D)
 		else --Uh oh!
 			local statement = ReturnData.T == 2 and "break" or "continue"
 			Error("Illegal attempt to "..statement.." the current scope")

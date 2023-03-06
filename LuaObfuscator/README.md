@@ -18,7 +18,7 @@ Since the script was designed for roblox studio, it just outputs the result by p
 
 ### Executor.lua
 
-This script is purely made by me, and parses the output given by Parser.lua. It attempts to follow as much behaviour as close as possible to lua implementation (even including the stupid [truncation logic](https://www.lua.org/manual/5.1/manual.html#2.5)), but I suspect that there may be some sort of loose end somewhere, so there is a (hopefully small) chance scripts won't work. The string parser is simply, once again, a stripped down version of a serializer and bitwriter from an old project, but optimised specifically for this to get over some complications with execution speed and string size limits. Lot of important comments in here, so if you want to understand the flow, do give this a read (and ignore the mess that is the Function Expression and HandleReturnAmbiguity)
+This script is purely made by me, and parses the output given by Parser.lua. It attempts to follow as much behaviour as close as possible to lua implementation (even including the stupid [truncation logic](https://www.lua.org/manual/5.1/manual.html#2.5)). Note that, while I don't *believe* there are any flaws in the executor, I can't give any guarantee, and there is a (hopefully very small) chance any script will error. The string parser is simply, once again, a stripped down version of a serializer and bitwriter from an old project, but optimised specifically for this to get over some complications with execution speed and string size limits. Lot of important comments in here, so if you want to understand the flow, do give this a proper read.
 
 #### ExecutorMinified.lua
 
