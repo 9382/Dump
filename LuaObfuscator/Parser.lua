@@ -31,7 +31,8 @@ function PrintTable(tb, atIndent)
 		if type(v) ~= 'function' then
 			out = out..(useNewlines and baseIndent or '')
 			if type(k) == 'number' then
-				--nothing to do
+				--nothing to do --I disagree
+				out = out.."["..k.."] = "
 			elseif type(k) == 'string' and k:match("^[A-Za-z_][A-Za-z0-9_]*$") then 
 				out = out..k.." = "
 			elseif type(k) == 'string' then
@@ -1106,7 +1107,7 @@ function ParseLua(src)
 				if not tok:Is('Ident') then
 					return false, GenerateError("Function name expected")
 				end
-				local name = tok:Get().Data		
+				local name = tok:Get().Data
 				local localVar = scope:CreateLocal(name)
 				--	
 				local st, func = ParseFunctionArgsAndBody(scope)
@@ -1339,7 +1340,7 @@ local bitmanager = (function()
 		local NormalizedBits,Exponent = NormalizeScientific(IntegralBits.."."..FractionalBits)
 		NormalizedBits = string.sub(NormalizedBits,3,54)
 		if #NormalizedBits~=52 then
-			warn("[bitmanager] Precision lost during handling of double, missing",52-#NormalizedBits,"bits\nFractional:",fractional)
+			print("[bitmanager] Precision lost during handling of double, missing",52-#NormalizedBits,"bits\nFractional:",fractional)
 			NormalizedBits = padright(NormalizedBits,52,"0")
 		end
 		Exponent = ToBit(Exponent+1023,11)
@@ -1406,12 +1407,12 @@ local serializer = (function()
 				if obj == math.floor(obj) and obj < 8 and obj >= 0 then
 					Output:Write(TYPE_NUMBER_SUPERBASIC,TYPE_WIDTH)
 					Output:Write(obj,3)
-				elseif obj == math.floor(obj) and obj < 16 and obj >= 0 then
-					Output:Write(TYPE_NUMBER_BASIC,TYPE_WIDTH)
-					Output:Write(obj,4)
 				elseif obj == math.floor(obj) and obj < 32 and obj >= 0 then
-					Output:Write(TYPE_NUMBER_SIMPLE,TYPE_WIDTH)
+					Output:Write(TYPE_NUMBER_BASIC,TYPE_WIDTH)
 					Output:Write(obj,5)
+				elseif obj == math.floor(obj) and obj < 256 and obj >= 0 then
+					Output:Write(TYPE_NUMBER_SIMPLE,TYPE_WIDTH)
+					Output:Write(obj,8)
 				else
 					Output:Write(TYPE_NUMBER,TYPE_WIDTH)
 					Output:WriteDouble(obj)
@@ -1482,8 +1483,20 @@ local function AssignKey(t,k,n)
 		t[k] = nil
 	end
 end
+local uniqueLocals = {self=0}
+local nextUniqueLocal = 1 --ID 0 is reserved for the local "self", which has to be manually inserted by the executor in some situations, so begin from 1.
+local function GetUniqueLocal(l)
+	local n = uniqueLocals[l]
+	if not n then
+		uniqueLocals[l] = nextUniqueLocal
+		nextUniqueLocal = nextUniqueLocal + 1
+		return nextUniqueLocal - 1
+	else
+		return n
+	end
+end
 local function deepModify(t)
-	--Remove irrelevant
+	--Remove irrelevant data
 	t.Scope = nil
 	t.Char = nil
 	t.Position = nil
@@ -1491,6 +1504,42 @@ local function deepModify(t)
 	t.CanRename = nil
 	t.Print = nil
 	t.LeadingWhite = nil
+
+	--Optimise names of locals to be numerical rather than strings
+	if t.AstType == "LocalStatement" then --Defining locals
+		for _,Local in next,t.LocalList do
+			if type(Local.Name) ~= "number" then
+				Local.Name = GetUniqueLocal(Local.Name)
+			end
+		end
+	elseif t.AstType == "Function" then --function(locals)
+		for _,Local in next,t.Arguments do
+			if type(Local.Name) ~= "number" then
+				Local.Name = GetUniqueLocal(Local.Name)
+			end
+		end
+	elseif t.AstType == "NumericForStatement" then --for local in whatever do
+		if type(t.Variable.Name) ~= "number" then
+			t.Variable.Name = GetUniqueLocal(t.Variable.Name)
+		end
+	elseif t.AstType == "GenericForStatement" then --for locals in whatever do
+		for _,Local in next,t.VariableList do
+			if type(Local.Name) ~= "number" then
+				Local.Name = GetUniqueLocal(Local.Name)
+			end
+		end
+	end
+	if t.IsLocal and t.Name then --Functions
+		--Somehow ParseSimpleExpr can generate a nameless but local function. /shrug
+		if type(t.Name.Name) ~= "number" then
+			t.Name.Name = GetUniqueLocal(t.Name.Name)
+		end
+	end
+	if t.Local then --VarExpr
+		if type(t.Name) ~= "number" then
+			t.Name = GetUniqueLocal(t.Name)
+		end
+	end
 
 	--Simplify values
 	local HasAstType = type(t.AstType) == "string"
@@ -1582,10 +1631,11 @@ end
 return function(C)
 	local s,p = ParseLua(C)
 	if not s then
-		warn("Failed to parse the lua - "..p)
+		print("Failed to parse the lua - "..p)
 		return false,p
 	end
 
 	deepModify(p)
+	-- print(PrintTable(p))
 	return true, serializer(p)
 end

@@ -16,9 +16,7 @@ local function CreateExecutionLoop(ast)
 	local executeExpression
 
 	local function CreateExecutionScope(parent)
-		local scope = {}
-		scope.P = parent
-		scope.L = {}
+		local scope = {P=parent, L={}}
 		function scope:GL(name)
 			local my = scope.L[name]
 			if my then return my end
@@ -75,10 +73,12 @@ local function CreateExecutionLoop(ast)
 		end
 		AmbiguityTracker[t] = {data[1]+1, iterateIndex}
 	end
-	local function SafeUnpack(t) --Unpack while considering the real length of the table (see above)
+	local function SafeUnpack(t, dontClear) --Unpack while considering the real length of the table (see above)
 		local TData = AmbiguityTracker[t]
 		if TData then
-			AmbiguityTracker[t] = nil --Clear memory, since we won't need it afterwards
+			if not dontClear then --For "..."
+				AmbiguityTracker[t] = nil --Clear memory, since we won't need it afterwards
+			end
 			return Unpack(t,1,TData[2]-1)
 		else
 			return Unpack(t)
@@ -94,7 +94,7 @@ local function CreateExecutionLoop(ast)
 				local LocalDefinition = scope:GL(expr[0])
 				if not LocalDefinition then
 					if expr[17] then
-						Error("Expected '" .. Tostring(expr[0]) .. "' was missing") --Likely an us fault, not a user fault
+						Error("Expected '" .. Tostring(expr[0]) .. "' was missing") --Fault in the Parser or Executor
 					end
 				else
 					return LocalDefinition[16]
@@ -164,7 +164,7 @@ local function CreateExecutionLoop(ast)
 			end
 
 		elseif AstType == 12 then
-			return SafeUnpack(scope:GL("...")[16])
+			return SafeUnpack(scope:GL(-1)[16], True) -- -1 is the reserved LocalID for local "..."
 
 		elseif AstType == 5 or
 		AstType == 7 or
@@ -217,10 +217,10 @@ local function CreateExecutionLoop(ast)
 				end
 				if expr[14] then
 					local varargs = {}
-					for i = #expr[3]+1, #inputArgs do
-						varargs[#varargs+1] = inputArgs[i]
+					for i = #expr[3]+1, Select("#",...) do
+						HandleReturnAmbiguity(varargs, inputArgs[i])
 					end
-					childScope:ML("...", varargs)
+					childScope:ML(-1, varargs) -- -1 is the reserved LocalID for local "..."
 				end
 				local ReturnData = executeStatList(expr[1], childScope)
 				if not ReturnData then --No return statement to handle
@@ -357,7 +357,7 @@ local function CreateExecutionLoop(ast)
 					for i = #statement[3],1,-1 do
 						statement[3][i+1] = statement[3][i]
 					end
-					statement[3][1] = {[0]="self", [17]=True}
+					statement[3][1] = {[0]=0, [17]=True} --0 is the reserved LocalID for local "self"
 					--Continue normal execution
 					local Container = executeExpression(name[5], statement.S)
 					local f = executeExpression(statement, statement.S, True)
@@ -561,12 +561,12 @@ local function CreateExecutionLoop(ast)
 						HandleKVSorting(ReadDouble())
 					elseif ObjType == TYPE_BOOLEAN then
 						HandleKVSorting(Read(1) == 1) --Simple enough
-					elseif ObjType == TYPE_NUMBER_BASIC then
-						HandleKVSorting(Read(4))
 					elseif ObjType == TYPE_NUMBER_SUPERBASIC then
 						HandleKVSorting(Read(3))
-					elseif ObjType == TYPE_NUMBER_SIMPLE then
+					elseif ObjType == TYPE_NUMBER_BASIC then
 						HandleKVSorting(Read(5))
+					elseif ObjType == TYPE_NUMBER_SIMPLE then
+						HandleKVSorting(Read(8))
 					end
 				end
 			end
