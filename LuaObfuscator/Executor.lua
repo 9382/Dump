@@ -47,7 +47,7 @@ local function CreateExecutionLoop(ast)
 		return scope
 	end
 
-	local FunctionEnvironment = __ENV or Getfenv()
+	local FunctionEnvironment = Getfenv()
 	local AmbiguityTracker = {}
 	local function HandleReturnAmbiguity(t,...)
 		--Doing this via a function gets around some of the confusion caused when using {...}
@@ -57,17 +57,20 @@ local function CreateExecutionLoop(ast)
 		--For this reason, any table should rely on SafeUnpack instead of Unpack
 		--to avoid unreasonable early trimming of outputs
 
-		--This also automatically handles stupid truncation logic how lua does, E.g.
+		--This also automatically handles stupid truncation logic the way lua does it, E.g.
 		---- < local a,b,c,d,e = (function()return 1,2,3,4,5 end)(), (function()return 3 end)(); print(a,b,c,d,e)
 		---- > 1 3 nil nil nil
 		local data = AmbiguityTracker[t] or {1,1}
 		--data[1] is data start point, data[2] is truncation end point
 		local dots = {...} --This is safe here, no panic needed
 		local iterateIndex = data[1]
-		for i = iterateIndex,data[2] do --Truncate out old values
-			t[i] = Nil
+		local entries = Select("#",...)
+		if entries > 1 then
+			for i = iterateIndex,data[2] do --Truncate out old values
+				t[i] = Nil
+			end
 		end
-		for i = 1,Select("#",...) do --Push in new values
+		for i = 1, entries do --Push in new values
 			t[iterateIndex] = dots[i]
 			iterateIndex = iterateIndex + 1
 		end
@@ -91,13 +94,13 @@ local function CreateExecutionLoop(ast)
 			if SpecialState then
 				return expr, True
 			else
-				local LocalDefinition = scope:GL(expr[0])
-				if not LocalDefinition then
-					if expr[17] then
+				if expr[17] then
+					local LocalDefinition = scope:GL(expr[0])
+					if not LocalDefinition then
 						Error("Expected '" .. Tostring(expr[0]) .. "' was missing") --Fault in the Parser or Executor
+					else
+						return LocalDefinition[16]
 					end
-				else
-					return LocalDefinition[16]
 				end
 				return FunctionEnvironment[expr[0]]
 			end
