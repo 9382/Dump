@@ -6,6 +6,17 @@
 -- script for usage on Roblox. Needed to deal with Roblox' lack of `require`.
 --
 
+local BackslashEscaping = {
+	a="\a", b="\b", f="\f", n="\n", r="\r", t="\t", v="\v",
+	["\\"]="\\", ['"']='"', ["'"]="'", ["["]="[", ["]"]="]"
+}
+local function ParseEscapeSequence(input)
+	if string.sub(input,1,1) == "x" then
+		return string.char(tonumber(input))
+	end
+	return string.char(tonumber(input,16))
+end
+
 function lookupify(tb)
 	for _, v in pairs(tb) do
 		tb[v] = true
@@ -260,20 +271,45 @@ function LexLua(src)
 				local start = p
 				--string const
 				local delim = get()
+				local content = ""
 				local contentStart = p
 				while true do
 					local c = get()
 					if c == '\\' then
-						get() --get the escape char
+						local next = get()
+						local replacement = BackslashEscaping[next]
+						if replacement then
+							content = content .. replacement
+						else
+							if next == "x" then
+								local n1 = get()
+								if n1 == "" or n1 == delim or not Digits[n1] then
+									generateError("invalid escape sequence near '"..delim.."'")
+								end
+								local n2 = get()
+								if n2 == "" or n2 == delim or not Digits[n2] then
+									generateError("invalid escape sequence near '"..delim.."'")
+								end
+								content = content .. string.char(tonumber(n1 .. n2, 16))
+							elseif Digits[next] then
+								local num = next
+								while #num < 3 and Digits[peek()] do
+									num = num .. get()
+								end
+								content = content .. string.char(tonumber(num))
+							else
+								generateError("invalid escape sequence near '"..delim.."'")
+							end
+						end
 					elseif c == delim then
 						break
 					elseif c == '' then
 						generateError("Unfinished string near <eof>")
+					else
+						content = content .. c
 					end
 				end
-				local content = src:sub(contentStart, p-2)
-				local constant = src:sub(start, p-1)
-				toEmit = {Type = 'String', Data = constant, Constant = content}
+				toEmit = {Type = 'String', Data = delim .. content .. delim, Constant = content}
 
 			elseif c == '[' then
 				local content, wholetext = tryGetLongString()
@@ -1400,7 +1436,7 @@ local serializer = (function()
 			elseif type(obj) == "string" then
 				Output:Write(TYPE_STRING,TYPE_WIDTH)
 				obj = string.gsub(obj,"\\","\\\\")
-				obj = string.gsub(obj,"%z","\\0") --Escape non-terminators
+				obj = string.gsub(obj,"%z","\\\0") --Escape non-terminators
 				Output:WriteString(obj)
 				Output:Write(0,8) --Null terminator
 			elseif type(obj) == "number" then
