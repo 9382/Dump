@@ -1534,6 +1534,7 @@ local function deepModify(t)
 	t.CanRename = nil
 	t.Print = nil
 	t.LeadingWhite = nil
+	t.ParenCount = nil
 
 	--Optimise names of locals to be numerical rather than strings
 	if t.AstType == "LocalStatement" then --Defining locals
