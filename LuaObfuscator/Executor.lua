@@ -38,7 +38,6 @@ local function CreateExecutionLoop(ast)
 		function scope:ML(name, value)
 			--create my own var
 			local my = {}
-			my.S = scope
 			my[0] = name
 			my[16] = value
 			scope.L[name] = my
@@ -257,31 +256,31 @@ local function CreateExecutionLoop(ast)
 		end
 	end
 
-	local executeStatement = function(statement)
+	local executeStatement = function(statement, scope)
 		local AstType = statement[7]
 		if AstType == 12 then
 			local out = {}
 			for i = 1, #statement[9] do
-				HandleReturnAmbiguity(out, executeExpression(statement[9][i], statement.S))
+				HandleReturnAmbiguity(out, executeExpression(statement[9][i], scope))
 			end
 			for i = 1, #statement[8] do
-				local Lhs, wasExprExit = executeExpression(statement[8][i], statement.S, True)
+				local Lhs, wasExprExit = executeExpression(statement[8][i], scope, True)
 				local Rhs = out[i]
 				if wasExprExit then
 					if Lhs[7] == 2 then
 						if Lhs[17] then
-							statement.S:SL(Lhs[0], Rhs)
+							scope:SL(Lhs[0], Rhs)
 						else
 							FunctionEnvironment[Lhs[0]] = Rhs
 						end
 
 					elseif Lhs[7] == 3 then
-						local Container = executeExpression(Lhs[5], statement.S)
+						local Container = executeExpression(Lhs[5], scope)
 						Container[Lhs[4][29]] = Rhs
 
 					else--if Lhs[7] == 4 then
-						local Container = executeExpression(Lhs[5], statement.S)
-						Container[executeExpression(Lhs[2], statement.S)] = Rhs
+						local Container = executeExpression(Lhs[5], scope)
+						Container[executeExpression(Lhs[2], scope)] = Rhs
 
 					--It will always be one of the above types. If it's not, thats a serializer error
 					end
@@ -289,28 +288,28 @@ local function CreateExecutionLoop(ast)
 			end
 
 		elseif AstType == 13 then
-			executeExpression(statement[21], statement.S)
+			executeExpression(statement[21], scope)
 
 		elseif AstType == 8 then
 			local out = {}
 			for i = 1, #statement[15] do
-				HandleReturnAmbiguity(out, executeExpression(statement[15][i], statement.S))
+				HandleReturnAmbiguity(out, executeExpression(statement[15][i], scope))
 			end
 			for i = 1, #statement[18] do
 				local l = statement[18][i]
-				statement.S:ML(l[0], out[i])
+				scope:ML(l[0], out[i])
 			end
 
 		elseif AstType == 2 then
 			for _, Clause in Pairs(statement[11]) do
-				if not Clause[10] or executeExpression(Clause[10], statement.S) then
-					return executeStatList(Clause[1], CreateExecutionScope(statement.S))
+				if not Clause[10] or executeExpression(Clause[10], scope) then
+					return executeStatList(Clause[1], CreateExecutionScope(scope))
 				end
 			end
 
 		elseif AstType == 3 then
-			while executeExpression(statement[10], statement.S) do
-				local ReturnData = executeStatList(statement[1], CreateExecutionScope(statement.S))
+			while executeExpression(statement[10], scope) do
+				local ReturnData = executeStatList(statement[1], CreateExecutionScope(scope))
 				if ReturnData then
 					if ReturnData.T == 2 then --Break, get out
 						return
@@ -321,12 +320,12 @@ local function CreateExecutionLoop(ast)
 			end
 
 		elseif AstType == 4 then
-			return executeStatList(statement[1], CreateExecutionScope(statement.S))
+			return executeStatList(statement[1], CreateExecutionScope(scope))
 
 		elseif AstType == 9 then
 			local arguments = {}
 			for _, arg in Pairs(statement[3]) do
-				HandleReturnAmbiguity(arguments, executeExpression(arg, statement.S))
+				HandleReturnAmbiguity(arguments, executeExpression(arg, scope))
 			end
 			return arguments
 
@@ -338,7 +337,7 @@ local function CreateExecutionLoop(ast)
 
 		elseif AstType == 7 then
 			repeat
-				local ReturnData = executeStatList(statement[1], CreateExecutionScope(statement.S))
+				local ReturnData = executeStatList(statement[1], CreateExecutionScope(scope))
 				if ReturnData then
 					if ReturnData.T == 2 then --Break, get out
 						return
@@ -346,14 +345,14 @@ local function CreateExecutionLoop(ast)
 						return ReturnData --Return, propogate
 					end --Else: A continue, just keep going
 				end
-			until executeExpression(statement[10], statement.S)
+			until executeExpression(statement[10], scope)
 
 		elseif AstType == 1 then
 			local name = statement[0]
 			if name[7] == 3 then
 				if name[6] == False then
-					local Container = executeExpression(name[5], statement.S)
-					local f = executeExpression(statement, statement.S)
+					local Container = executeExpression(name[5], scope)
+					local f = executeExpression(statement, scope)
 					Container[name[4][29]] = f
 				elseif name[6] == True then
 					--Make room for a "self" arg
@@ -362,15 +361,15 @@ local function CreateExecutionLoop(ast)
 					end
 					statement[3][1] = {[0]=0, [17]=True} --0 is the reserved LocalID for local "self"
 					--Continue normal execution
-					local Container = executeExpression(name[5], statement.S)
-					local f = executeExpression(statement, statement.S, True)
+					local Container = executeExpression(name[5], scope)
+					local f = executeExpression(statement, scope, True)
 					Container[name[4][29]] = f
 				end
 
 			else
-				local f = executeExpression(statement, statement.S)
+				local f = executeExpression(statement, scope)
 				if statement[22] then
-					statement.S:ML(name[0], f)
+					scope:ML(name[0], f)
 				else
 					FunctionEnvironment[name[0]] = f
 				end
@@ -380,16 +379,16 @@ local function CreateExecutionLoop(ast)
 			local gen1, gen2, gen3
 			local generators = statement[19]
 			if not generators[2] then
-				gen1, gen2, gen3 = executeExpression(generators[1], statement.S)
+				gen1, gen2, gen3 = executeExpression(generators[1], scope)
 			else
-				gen1 = executeExpression(generators[1], statement.S)
-				gen2 = executeExpression(generators[2], statement.S)
+				gen1 = executeExpression(generators[1], scope)
+				gen2 = executeExpression(generators[2], scope)
 				if generators[3] then
-					gen3 = executeExpression(generators[3], statement.S)
+					gen3 = executeExpression(generators[3], scope)
 				end
 			end
 			while True do
-				local childScope = CreateExecutionScope(statement.S)
+				local childScope = CreateExecutionScope(scope)
 				local args = {gen1(gen2, gen3)}
 				--We aren't gonna use HandleReturnAmbiguity here, it just isnt worth it as far as im concerned
 				gen3 = args[1]
@@ -411,12 +410,12 @@ local function CreateExecutionLoop(ast)
 			end
 
 		elseif AstType == 5 then
-			local var = Tonumber(executeExpression(statement[23], statement.S))
-			local limit = Tonumber(executeExpression(statement[24], statement.S))
-			local step = statement[25] and Tonumber(executeExpression(statement[25], statement.S)) or 1
+			local var = Tonumber(executeExpression(statement[23], scope))
+			local limit = Tonumber(executeExpression(statement[24], scope))
+			local step = statement[25] and Tonumber(executeExpression(statement[25], scope)) or 1
 
 			while (step > 0 and var <= limit) or (step <= 0 and var >= limit) do
-				local childScope = CreateExecutionScope(statement.S)
+				local childScope = CreateExecutionScope(scope)
 				childScope:ML(statement[26][0], var)
 				local ReturnData = executeStatList(statement[1], childScope)
 				if ReturnData then
@@ -437,8 +436,7 @@ local function CreateExecutionLoop(ast)
 		--A type of 2 is a break
 		--A type of 3 is a continue
 		for _, stat in Pairs(statList[1]) do
-			stat.S = scope
-			local out = executeStatement(stat)
+			local out = executeStatement(stat, scope)
 			if Type(out) == "table" then
 				if not out.P then --Create an internal token
 					return {P = True, T = 1, D = out}
