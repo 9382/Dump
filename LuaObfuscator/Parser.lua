@@ -1457,7 +1457,7 @@ local serializer = (function()
 				Output:Write(TYPE_BOOLEAN,TYPE_WIDTH)
 				Output:Write((obj==true and 1) or 0) --Simple enough
 			elseif type(obj) == "function" then
-				--Do absolutely nothing
+				error("Serializing a function? Yeah no, lets not")
 			else
 				error("Object of type "..type(obj).." can't be processed by the serializer")
 			end
