@@ -6,17 +6,6 @@
 -- script for usage on Roblox. Needed to deal with Roblox' lack of `require`.
 --
 
-local BackslashEscaping = {
-	a="\a", b="\b", f="\f", n="\n", r="\r", t="\t", v="\v",
-	["\\"]="\\", ['"']='"', ["'"]="'", ["["]="[", ["]"]="]"
-}
-local function ParseEscapeSequence(input)
-	if string.sub(input,1,1) == "x" then
-		return string.char(tonumber(input))
-	end
-	return string.char(tonumber(input,16))
-end
-
 function lookupify(tb)
 	for _, v in pairs(tb) do
 		tb[v] = true
@@ -92,6 +81,11 @@ local Keywords = lookupify{
 		'in', 'local', 'nil', 'not', 'or', 'repeat',
 		'return', 'then', 'true', 'until', 'while',
 };
+
+local BackslashEscaping = {
+	a="\a", b="\b", f="\f", n="\n", r="\r", t="\t", v="\v",
+	["\\"]="\\", ['"']='"', ["'"]="'", ["["]="[", ["]"]="]"
+}
 
 function LexLua(src)
 	--token dump
