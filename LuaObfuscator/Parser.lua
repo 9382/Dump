@@ -1531,6 +1531,7 @@ local function deepModify(t, firstCall)
 	if firstCall then
 		uniqueLocals = {self=0}
 		nextUniqueLocal = 1
+		checked = {}
 	end
 	--Remove irrelevant data
 	t.Scope = nil
