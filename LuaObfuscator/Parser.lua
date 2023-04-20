@@ -641,6 +641,9 @@ function ParseLua(src)
 		while true do
 			if tok:IsSymbol('.') or tok:IsSymbol(':') then
 				local symb = tok:Get().Data
+				if symb == ":" then
+					scope:CreateLocal("self")
+				end
 				if not tok:Is('Ident') then
 					return false, GenerateError("<Ident> expected.")
 				end
