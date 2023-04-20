@@ -6,8 +6,8 @@ local function CreateExecutionLoop(ast)
 	local mathfloor, mathlog
 		= math.floor, math.log
 
-	local Type, Pairs, Select, Unpack, Getfenv, Error, Tonumber, Tostring, Assert
-		= type, pairs, select, unpack, getfenv, error, tonumber, tostring, assert
+	local Type, iPairs, Select, Unpack, Getfenv, Error, Tonumber, Tostring, Assert
+		= type, ipairs, select, unpack, getfenv, error, tonumber, tostring, assert
 
 	local True, False, Nil
 		= true, false, nil
@@ -172,7 +172,7 @@ local function CreateExecutionLoop(ast)
 		AstType == 7 or
 		AstType == 6 then
 			local args = {}
-			for _, arg in Pairs(expr[3]) do
+			for _, arg in iPairs(expr[3]) do
 				if AstType == 6 then
 					args = {arg[29]}
 				else
@@ -238,7 +238,7 @@ local function CreateExecutionLoop(ast)
 		elseif AstType == 13 then
 			local out = {}
 			--Process all key'd entries first
-			for _, entry in Pairs(expr[13]) do
+			for _, entry in iPairs(expr[13]) do
 				if entry[27] == 0 then
 					out[executeExpression(entry[28], scope)] = executeExpression(entry[16], scope)
 				elseif entry[27] == 1 then
@@ -246,7 +246,7 @@ local function CreateExecutionLoop(ast)
 				end
 			end
 			--And then do the unkey'd ones
-			for _, entry in Pairs(expr[13]) do
+			for _, entry in iPairs(expr[13]) do
 				if entry[27] == 2 then
 					HandleReturnAmbiguity(out, executeExpression(entry[16], scope))
 				end
@@ -301,7 +301,7 @@ local function CreateExecutionLoop(ast)
 			end
 
 		elseif AstType == 2 then
-			for _, Clause in Pairs(statement[11]) do
+			for _, Clause in iPairs(statement[11]) do
 				if not Clause[10] or executeExpression(Clause[10], scope) then
 					return executeStatList(Clause[1], CreateExecutionScope(scope))
 				end
@@ -324,7 +324,7 @@ local function CreateExecutionLoop(ast)
 
 		elseif AstType == 9 then
 			local arguments = {}
-			for _, arg in Pairs(statement[3]) do
+			for _, arg in iPairs(statement[3]) do
 				HandleReturnAmbiguity(arguments, executeExpression(arg, scope))
 			end
 			return arguments
@@ -350,18 +350,11 @@ local function CreateExecutionLoop(ast)
 		elseif AstType == 1 then
 			local name = statement[0]
 			if name[7] == 3 then
+				local Container = executeExpression(name[5], scope)
 				if name[6] == False then
-					local Container = executeExpression(name[5], scope)
 					local f = executeExpression(statement, scope)
 					Container[name[4][29]] = f
-				elseif name[6] == True then
-					--Make room for a "self" arg
-					for i = #statement[3],1,-1 do
-						statement[3][i+1] = statement[3][i]
-					end
-					statement[3][1] = {[0]=0, [17]=True} --0 is the reserved LocalID for local "self"
-					--Continue normal execution
-					local Container = executeExpression(name[5], scope)
+				elseif name[6] == True then --Special flag call to ensure self logic
 					local f = executeExpression(statement, scope, True)
 					Container[name[4][29]] = f
 				end
@@ -435,7 +428,7 @@ local function CreateExecutionLoop(ast)
 		--A type of 1 is a return
 		--A type of 2 is a break
 		--A type of 3 is a continue
-		for _, stat in Pairs(statList[1]) do
+		for _, stat in iPairs(statList[1]) do
 			local out = executeStatement(stat, scope)
 			if Type(out) == "table" then
 				if not out.P then --Create an internal token

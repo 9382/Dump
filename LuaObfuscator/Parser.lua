@@ -1543,6 +1543,15 @@ local function deepModify(t, firstCall)
 	t.LeadingWhite = nil
 	t.ParenCount = nil
 
+	--Fix table:func() assignment issues before runtime
+	if t.AstType == "Function" and t.Name and t.Name.Indexer == ":" then
+		--Make room for a "self" arg
+		for i = #t.Arguments,1,-1 do
+			t.Arguments[i+1] = t.Arguments[i]
+		end
+		t.Arguments[1] = {Name="self"}
+	end
+
 	--Optimise names of locals to be numerical rather than strings
 	if t.AstType == "LocalStatement" then --Defining locals
 		for _,Local in next,t.LocalList do
