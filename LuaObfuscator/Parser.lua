@@ -1508,8 +1508,6 @@ local UnOpToID = {
 	["-"]=1, ["not"]=2, ["#"]=3
 }
 
-local checked = {}
-local uniqueKeys = {}
 local function AssignKey(t,k,n)
 	if t[k] ~= nil then
 		t[n] = t[k]
@@ -1528,7 +1526,12 @@ local function GetUniqueLocal(l)
 		return n
 	end
 end
-local function deepModify(t)
+local checked = {}
+local function deepModify(t, firstCall)
+	if firstCall then
+		uniqueLocals = {self=0}
+		nextUniqueLocal = 1
+	end
 	--Remove irrelevant data
 	t.Scope = nil
 	t.Char = nil
@@ -1669,7 +1672,7 @@ return function(C)
 		return false,p
 	end
 
-	deepModify(p)
+	deepModify(p, true)
 	-- print(PrintTable(p))
 	return true, serializer(p)
 end
