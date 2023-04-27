@@ -2,6 +2,8 @@
 
 This follows the same idea as LuaObfuscator, which is to be able to parse and execute a string as python code *without* using exec. Note that this module is in progress and is not in a finished state by any standard, and versions can expected to be broken or unfinished
 
+The code for this is designed to work for python 3.8. Future and past versions will likely continue to work, though certain features may be broken or unavailable
+
 ## Info
 
 Some more info on each of the files
