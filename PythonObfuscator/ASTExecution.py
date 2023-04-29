@@ -56,10 +56,10 @@ BinOp				Implemented
 UnaryOp				Implemented
 Lambda				Implemented
 IfExp				Not implemented
-Dict				Not implemented
-Set					Not implemented
-ListComp			Implemented
-SetComp				Not implemented
+Dict				Implemented
+Set					Implemented
+ListComp			Implemented			Needs re-doing (we should really evalute the comprehension for some consistency, also missing support for multiple for statements or if statements)
+SetComp				Implemented			ditto
 DictComp			Not implemented
 GeneratorExp		Not implemented
 
@@ -290,8 +290,25 @@ def CreateExecutionLoop(code):
 		elif exprType == ast.keyword:
 			return expr.arg, ExecuteExpression(expr.value, scope)
 
+		elif exprType == ast.Tuple:
+			return tuple([ExecuteExpression(entry, scope) for entry in expr.elts])
+
 		elif exprType == ast.List:
 			return [ExecuteExpression(entry, scope) for entry in expr.elts]
+
+		elif exprType == ast.Set:
+			return set([ExecuteExpression(entry, scope) for entry in expr.elts])
+
+		elif exprType == ast.Dict:
+			out = {}
+			for i in range(len(expr.keys)):
+				key, value = expr.keys[i], expr.values[i]
+				if key == None: #value is a dict that needs unpacking
+					for k,v in ExecuteExpression(value, scope).items():
+						out[k] = v
+				else:
+					out[ExecuteExpression(key, scope)] = ExecuteExpression(value, scope)
+			return out
 
 		elif exprType == ast.ListComp:
 			comprehension = expr.generators[0]
@@ -304,8 +321,16 @@ def CreateExecutionLoop(code):
 				out.append(ExecuteExpression(expr.elt, subScope))
 			return out
 
-		elif exprType == ast.Tuple:
-			return tuple([ExecuteExpression(entry, scope) for entry in expr.elts])
+		elif exprType == ast.SetComp:
+			comprehension = expr.generators[0]
+			iterRange = ExecuteExpression(comprehension.iter, scope)
+			targetVar = ExecuteExpression(comprehension.target, scope)
+			out = set()
+			subScope = VariableScope(scope, "generator")
+			for value in iterRange:
+				subScope.setVar(targetVar, value)
+				out.add(ExecuteExpression(expr.elt, subScope))
+			return out
 
 		elif exprType == ast.Index: #Warning: Undocumented. Likely removed after py3.8
 			return ExecuteExpression(expr.value, scope)
@@ -719,6 +744,11 @@ print("TestObj=",TestObj)
 print("TO.gety()=",TestObj.gety())
 TestObj.y += 15
 print("TO.gety()=",TestObj.gety())
+
+x = {"A":5, 6:True}
+y = {**x, 8:True}
+z = {**y, **x, "A":1}
+print(x,y,z)
 
 return "Im", "Done"
 """)
