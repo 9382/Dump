@@ -32,7 +32,7 @@ AsyncWith			Not implemented
 Match				Not implemented		Switch statement (but called `case`)
 
 Raise				Not implemented
-Try					Implemented			Untested
+Try					Implemented			Mostly untested
 TryStar				Wont implement		except* (whatever that means) - not doing it since I can't find valid uses anywhere and its >py3.8.
 Assert				Not implemented
 
@@ -43,14 +43,14 @@ Global				Not implemented		VariableScope needs sorting among other things
 Nonlocal			Not implemented		ditto
 Expr				Implemented
 Pass				Implemented
-Break				Implemented			Untested
-Continue			Implemented			Untested
+Break				Implemented			Mostly untested
+Continue			Implemented			Mostly untested
 
 
 == Expressions ==
 Name 				Status				Extra notes
 
-BoolOp				Implemented			Mostly - MatMult is unknown
+BoolOp				Implemented
 NamedExpr			Not implemented
 BinOp				Implemented
 UnaryOp				Implemented
@@ -73,9 +73,9 @@ FormattedValue		Not implemented
 JoinedStr			Not implemented
 Constant			Implemented 		`kind` is ignored since idk what the point is
 
-Attribute			Implemented			Lots of statements manually escape evaluating this (Assign/Delete)
-Subscript			Implemented
-Starred				Not implemented		Dunno about this though
+Attribute			Implemented			Some statements manually escape evaluating this (Assign/Delete)
+Subscript			Implemented			ditto
+Starred				Not implemented		a, *b = x | Maximum of 1 per assign expr | Must return the unpack upon evaluation (This is going to require hooks outside of Starred :/) | * only valid in Call/Assign?
 Name				Implemented
 List				Implemented
 Tuple				Implemented			Leaches off list generator
@@ -190,10 +190,79 @@ def CreateExecutionLoop(code):
 				s = s + f"'{arg[i]}', "
 			return f"{s}'{arg[len(arg)-2]}' and '{arg[len(arg)-1]}'"
 
+	def ParseOperator(op):
+		op = type(op)
+		#Boolean operations are not supported and are handled just in the BoolOp expr
+		#UnaryOp
+		if op == ast.Invert:
+			return lambda x: ~x
+		elif op == ast.Not:
+			return lambda x: not x
+		elif op == ast.UAdd:
+			return lambda x: +x
+		elif op == ast.USub:
+			return lambda x: -x
+		#BinaryOp
+		elif op == ast.Add:
+			return lambda x,y: x + y
+		elif op == ast.Sub:
+			return lambda x,y: x - y
+		elif op == ast.Mult:
+			return lambda x,y: x * y
+		elif op == ast.MatMult:
+			return lambda x,y: x @ y
+		elif op == ast.Div:
+			return lambda x,y: x / y
+		elif op == ast.Mod:
+			return lambda x,y: x % y
+		elif op == ast.Pow:
+			return lambda x,y: x ** y
+		elif op == ast.LShift:
+			return lambda x,y: x << y
+		elif op == ast.RShift:
+			return lambda x,y: x >> y
+		elif op == ast.BitOr:
+			return lambda x,y: x | y
+		elif op == ast.BitXor:
+			return lambda x,y: x ^ y
+		elif op == ast.BitAnd:
+			return lambda x,y: x & y
+		elif op == ast.FloorDiv:
+			return lambda x,y: x // y
+		#Compare
+		elif op == ast.Eq:
+			return lambda x,y: x == y
+		elif op == ast.NotEq:
+			return lambda x,y: x != y
+		elif op == ast.Lt:
+			return lambda x,y: x < y
+		elif op == ast.LtE:
+			return lambda x,y: x <= y
+		elif op == ast.Gt:
+			return lambda x,y: x > y
+		elif op == ast.GtE:
+			return lambda x,y: x >= y
+		elif op == ast.Is:
+			return lambda x,y: x is y
+		elif op == ast.IsNot:
+			return lambda x,y: x is not y
+		elif op == ast.In:
+			return lambda x,y: x in y
+		elif op == ast.NotIn:
+			return lambda x,y: x not in y
+		#None of the above
+		else:
+			raise ExecutorException(f"Unrecognised operator type '{op}'")
+
 	ExecuteStatList = None
 	HandleArgAssignment = None
 
+	_DEBUG_LastExpr = None
+	_DEBUG_LastStatement = None
+
 	def ExecuteExpression(expr, scope, *, ForcedContext=None):
+		nonlocal _DEBUG_LastExpr
+		_DEBUG_LastExpr = expr
 		exprType = type(expr)
 		debugprint("Executing expression...",exprType)
 
@@ -262,84 +331,34 @@ def CreateExecutionLoop(code):
 		elif exprType == ast.BoolOp:
 			op = type(expr.op)
 			if op == ast.And:
-				for i in range(len(expr.values)):
-					value = ExecuteExpression(expr.values[i], scope)
-					if not value or i == len(expr.values)-1:
+				for subExpr in expr.values:
+					value = ExecuteExpression(subExpr, scope)
+					if not value:
 						return value
+				return value
 			elif op == ast.Or:
-				for i in range(len(expr.values)):
-					value = ExecuteExpression(expr.values[i], scope)
-					if value or i == len(expr.values)-1:
+				for subExpr in expr.values:
+					value = ExecuteExpression(subExpr, scope)
+					if value:
 						return value
+				return value
 
 		elif exprType == ast.UnaryOp:
-			op = type(expr.op)
+			op = ParseOperator(expr.op)
 			operand = ExecuteExpression(expr.operand, scope)
-			if op == ast.Invert:
-				return ~operand
-			elif op == ast.Not:
-				return not operand
-			elif op == ast.UAdd:
-				return +operand
-			elif op == ast.USub:
-				return -operand
+			return op(operand)
 
 		elif exprType == ast.BinOp:
 			Lhs = ExecuteExpression(expr.left, scope)
-			op = type(expr.op)
+			op = ParseOperator(expr.op)
 			Rhs = ExecuteExpression(expr.right, scope)
-			if op == ast.Add:
-				return Lhs + Rhs
-			elif op == ast.Sub:
-				return Lhs - Rhs
-			elif op == ast.Mult:
-				return Lhs * Rhs
-			elif op == ast.MatMult:
-				raise ExecutorException("What is MatMult") #TODO: Solve
-			elif op == ast.Div:
-				return Lhs / Rhs
-			elif op == ast.Mod:
-				return Lhs % Rhs
-			elif op == ast.Pow:
-				return Lhs ** Rhs
-			elif op == ast.LShift:
-				return Lhs << Rhs
-			elif op == ast.RShift:
-				return Lhs >> Rhs
-			elif op == ast.BitOr:
-				return Lhs | Rhs
-			elif op == ast.BitXor:
-				return Lhs ^ Rhs
-			elif op == ast.BitAnd:
-				return Lhs & Rhs
-			elif op == ast.FloorDiv:
-				return Lhs // Rhs
+			return op(Lhs, Rhs)
 
 		elif exprType == ast.Compare:
 			subject = ExecuteExpression(expr.left, scope)
 			for i in range(len(expr.ops)):
-				op, comparison = type(expr.ops[i]), ExecuteExpression(expr.comparators[i], scope)
-				successState = False
-				if op == ast.Eq:
-					successState = subject == comparison
-				elif op == ast.NotEq:
-					successState = subject != comparison
-				elif op == ast.Lt:
-					successState = subject < comparison
-				elif op == ast.LtE:
-					successState = subject <= comparison
-				elif op == ast.Gt:
-					successState = subject > comparison
-				elif op == ast.GtE:
-					successState = subject >= comparison
-				elif op == ast.Is:
-					successState = subject is comparison
-				elif op == ast.IsNot:
-					successState = subject is not comparison
-				elif op == ast.In:
-					successState = subject in comparison
-				elif op == ast.NotIn:
-					successState = subject not in comparison
+				op, comparison = ParseOperator(expr.ops[i]), ExecuteExpression(expr.comparators[i], scope)
+				successState = op(subject, comparison)
 				if successState == True:
 					if i == len(expr.ops)-1:
 						return True
@@ -371,6 +390,8 @@ def CreateExecutionLoop(code):
 
 
 	def ExecuteStatement(statement, scope):
+		nonlocal _DEBUG_LastStatement
+		_DEBUG_LastStatement = statement
 		stType = type(statement)
 		debugprint("Executing statement...",stType)
 
@@ -413,39 +434,13 @@ def CreateExecutionLoop(code):
 		elif stType == ast.AugAssign:
 			value = ExecuteExpression(statement.value, scope)
 			target = statement.target
-			op = type(statement.op)
-			if op == ast.Add:
-				calcluate = lambda x,y: x + y
-			elif op == ast.Sub:
-				calcluate = lambda x,y: x - y
-			elif op == ast.Mult:
-				calcluate = lambda x,y: x * y
-			elif op == ast.MatMult:
-				raise ExecutorException("What is MatMult")
-			elif op == ast.Div:
-				calcluate = lambda x,y: x / y
-			elif op == ast.Mod:
-				calcluate = lambda x,y: x % y
-			elif op == ast.Pow:
-				calcluate = lambda x,y: x ** y
-			elif op == ast.LShift:
-				calcluate = lambda x,y: x << y
-			elif op == ast.RShift:
-				calcluate = lambda x,y: x >> y
-			elif op == ast.BitOr:
-				calcluate = lambda x,y: x | y
-			elif op == ast.BitXor:
-				calcluate = lambda x,y: x ^ y
-			elif op == ast.BitAnd:
-				calcluate = lambda x,y: x & y
-			elif op == ast.FloorDiv:
-				calcluate = lambda x,y: x // y
+			op = ParseOperator(statement.op)
 			if type(target) == ast.Name:
-				scope.setVar(ExecuteExpression(target, scope), calcluate(ExecuteExpression(target, scope, ForcedContext=ast.Load), value))
+				scope.setVar(ExecuteExpression(target, scope), op(ExecuteExpression(target, scope, ForcedContext=ast.Load), value))
 			elif type(target) == ast.Attribute:
-				setattr(ExecuteExpression(target.value, scope), target.attr, calcluate(ExecuteExpression(target, scope, ForcedContext=ast.Load), value))
+				setattr(ExecuteExpression(target.value, scope), target.attr, op(ExecuteExpression(target, scope, ForcedContext=ast.Load), value))
 			elif type(target) == ast.Subscript:
-				ExecuteExpression(target.value, scope)[ExecuteExpression(target.slice, scope)] = calcluate(ExecuteExpression(target.value, scope)[ExecuteExpression(target.slice, scope)], value)
+				ExecuteExpression(target.value, scope)[ExecuteExpression(target.slice, scope)] = op(ExecuteExpression(target.value, scope)[ExecuteExpression(target.slice, scope)], value)
 			else:
 				raise ExecutorException(f"Unable to assign to unrecognised type '{type(target)}'")
 
@@ -671,12 +666,26 @@ def CreateExecutionLoop(code):
 	def __main__():
 		scope = VariableScope(None, "core")
 		debugprint("Input code:",code)
-		out = ExecuteStatList(finalCode.body, scope)
-		if out:
-			if out.Type == "Break" or out.Type == "Continue":
-				raise SyntaxError(f"'{out.Type}' outside loop")
-			else:
-				return out.Data
+		try:
+			out = ExecuteStatList(finalCode.body, scope)
+		except BaseException as exc:
+			if _DEBUG:
+				debugprint("[!] We ran into a critical error")
+				if _DEBUG_LastExpr:
+					debugprint("Last expression:",ast.dump(_DEBUG_LastExpr))
+				else:
+					debugprint("Last expression: None")
+				if _DEBUG_LastStatement:
+					debugprint("Last statement:",ast.dump(_DEBUG_LastStatement))
+				else:
+					debugprint("Last statement: None")
+			raise exc
+		else:
+			if out:
+				if out.Type == "Break" or out.Type == "Continue":
+					raise SyntaxError(f"'{out.Type}' outside loop")
+				else:
+					return out.Data
 
 	return __main__
 
@@ -708,7 +717,7 @@ print("Test=",Test)
 TestObj = Test(8)
 print("TestObj=",TestObj)
 print("TO.gety()=",TestObj.gety())
-TestObj.y = 15
+TestObj.y += 15
 print("TO.gety()=",TestObj.gety())
 
 return "Im", "Done"
@@ -718,6 +727,6 @@ debugprint("AST Dump:",ast.dump(testing))
 
 debugprint("Generating execution loop")
 out = CreateExecutionLoop(testing)
-debugprint("Execution execution loop")
+debugprint("Executing execution loop")
 final = out()
 debugprint("Finished execution loop. Final output:",final)
