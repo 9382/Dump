@@ -19,7 +19,7 @@ Return				Implemented
 
 Delete				Implemented
 Assign				Implemented
-AugAssign			Implemented			Steals code from BoolOp
+AugAssign			Implemented			Support for an __iXYZ__ attr check? possibly OTT
 AnnAssign			Not implemented
 
 For					Implemented			Mostly untested
@@ -31,10 +31,10 @@ AsyncWith			Not implemented
 
 Match				Not implemented		Switch statement (but called `case`)
 
-Raise				Not implemented
+Raise				Implemented
 Try					Implemented			Mostly untested
 TryStar				Wont implement		except* (whatever that means) - not doing it since I can't find valid uses anywhere and its >py3.8.
-Assert				Not implemented
+Assert				Implemented
 
 Import				Not implemented
 ImportFrom			Not implemented
@@ -51,7 +51,7 @@ Continue			Implemented			Mostly untested
 Name 				Status				Extra notes
 
 BoolOp				Implemented
-NamedExpr			Not implemented
+NamedExpr			Implemented
 BinOp				Implemented
 UnaryOp				Implemented
 Lambda				Implemented
@@ -278,6 +278,13 @@ def CreateExecutionLoop(code):
 			elif ctx == ast.Del:
 				return expr.id
 
+		elif exprType == ast.NamedExpr:
+			target, value = ExecuteExpression(expr.target, scope), ExecuteExpression(expr.value, scope)
+			if type(target) == tuple or type(target) == list:
+				raise SyntaxError(f"cannot use assignment expressions with {type(target)}")
+			scope.setVar(target, value)
+			return ast.Name(target, ast.Load())
+
 		elif exprType == ast.Attribute:
 			ctx = ForcedContext or type(expr.ctx)
 			if ctx == ast.Load:
@@ -472,6 +479,13 @@ def CreateExecutionLoop(code):
 		elif stType == ast.Assert:
 			if not ExecuteExpression(statement.test, scope):
 				raise AssertionError(ExecuteExpression(statement.msg, scope))
+
+		elif stType == ast.Raise:
+			if statement.exc:
+				if statement.cause:
+					raise ExecuteExpression(statement.exc, scope) from ExecuteExpression(statement.cause, scope)
+				raise ExecuteExpression(statement.exc, scope)
+			raise
 
 		elif stType == ast.Global:
 			for entry in statement.names:
