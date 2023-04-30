@@ -254,9 +254,6 @@ def CreateExecutionLoop(code):
 		else:
 			raise ExecutorException(f"Unrecognised operator type '{op}'")
 
-	ExecuteStatList = None
-	HandleArgAssignment = None
-
 	_DEBUG_LastExpr = None
 	_DEBUG_LastStatement = None
 
@@ -591,6 +588,8 @@ def CreateExecutionLoop(code):
 						raise SyntaxError(f"'{out.Type}' outside loop")
 					else:
 						return out.Data
+			FunctionHandler.__name__ = statement.name
+			FunctionHandler.__qualname__ = statement.name #Technically a bit wrong but eh
 			scope.setVar(statement.name, FunctionHandler)
 
 		elif stType == ast.ClassDef:
@@ -600,6 +599,8 @@ def CreateExecutionLoop(code):
 				keywords[entry.arg] = ExecuteExpression(entry.value)
 			class DummyClass(*bases, **keywords): #This is legal, wow. Thanks python!
 				pass
+			DummyClass.__name__ = statement.name
+			DummyClass.__qualname__ = statement.name
 			subScope = ClassScope(scope, DummyClass) #Custom class subscope
 			out = ExecuteStatList(statement.body, subScope) #We shouldn't end early, period
 			if out != None:
