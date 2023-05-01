@@ -33,7 +33,6 @@ Match				Not implemented		Switch statement (but called `case`)
 
 Raise				Implemented
 Try					Implemented			Mostly untested
-TryStar				Wont implement		except* (whatever that means) - not doing it since I can't find valid uses anywhere and its >py3.8.
 Assert				Implemented
 
 Import				Not implemented
@@ -58,9 +57,9 @@ Lambda				Implemented
 IfExp				Not implemented
 Dict				Implemented
 Set					Implemented
-ListComp			Implemented			Needs re-doing (we should really evalute the comprehension for some consistency, also missing support for multiple for statements or if statements)
-SetComp				Implemented			ditto
-DictComp			Not implemented
+ListComp			Implemented
+SetComp				Implemented
+DictComp			Implemented
 GeneratorExp		Not implemented
 
 Await				Not implemented
@@ -315,26 +314,19 @@ def CreateExecutionLoop(code):
 			return out
 
 		elif exprType == ast.ListComp:
-			comprehension = expr.generators[0]
-			iterRange = ExecuteExpression(comprehension.iter, scope)
-			targetVar = ExecuteExpression(comprehension.target, scope)
-			out = []
 			subScope = VariableScope(scope, "generator")
-			for value in iterRange:
-				subScope.setVar(targetVar, value)
-				out.append(ExecuteExpression(expr.elt, subScope))
-			return out
+			out = ParseGenerators(expr.generators, [expr.elt], subScope)
+			return [x[0] for x in out]
+
+		elif exprType == ast.DictComp:
+			subScope = VariableScope(scope, "generator")
+			out = ParseGenerators(expr.generators, [expr.key, expr.value], subScope)
+			return {x[0]: x[1] for x in out}
 
 		elif exprType == ast.SetComp:
-			comprehension = expr.generators[0]
-			iterRange = ExecuteExpression(comprehension.iter, scope)
-			targetVar = ExecuteExpression(comprehension.target, scope)
-			out = set()
 			subScope = VariableScope(scope, "generator")
-			for value in iterRange:
-				subScope.setVar(targetVar, value)
-				out.add(ExecuteExpression(expr.elt, subScope))
-			return out
+			out = ParseGenerators(expr.generators, [expr.elt], subScope)
+			return {x[0] for x in out}
 
 		elif exprType == ast.Index: #Warning: Undocumented. Likely removed after py3.8
 			return ExecuteExpression(expr.value, scope)
@@ -701,6 +693,34 @@ def CreateExecutionLoop(code):
 		elif len(kwargCollector) > 0:
 			raise TypeError(f"{representation}() received too many keyword arguments")
 
+	#x = ["A", "DD", "B", "CCBC"]
+	#print([S+str(ord(C)) for S in x if S != "A" for C in S if C != "B"])
+	def ParseGenerators(generators, toEvaluate, scope):
+		"""
+		General generator handler, handling nested for and if statements
+		This should always be passed a subscope to avoid complications
+		"""
+		def RecursiveHandle(generators, i):
+			gen = generators[i]
+			iterator = ExecuteExpression(gen.iter, scope)
+			storage = ExecuteExpression(gen.target, scope)
+			combinations = []
+			for term in iterator:
+				scope.setVar(storage, term)
+				ShouldEvaluate = True
+				for condition in gen.ifs:
+					if not ExecuteExpression(condition, scope):
+						ShouldEvaluate = False
+						break
+				if ShouldEvaluate:
+					if i == len(generators)-1: #Last generator
+						for term in toEvaluate:
+							combinations.append([ExecuteExpression(out, scope) for out in toEvaluate])
+					else:
+						combinations.extend(RecursiveHandle(generators, i+1))
+			return combinations
+		return RecursiveHandle(generators, 0)
+
 	#At this point we'd parse the AST if it was obfuscated. Obviously, here in our little testing place, it isn't
 	finalCode = code
 	def __main__():
@@ -764,6 +784,17 @@ x = {"A":5, 6:True}
 y = {**x, 8:True}
 z = {**y, **x, "A":1}
 print(x,y,z)
+
+x = ["A", "DD", "B", "CCBC"]
+
+print("ListComp")
+print([S+str(ord(C)) for S in x if S != "A" for C in S if C != "B"])
+
+print("SetComp")
+print({S+str(ord(C)) for S in x if S != "A" for C in S if C != "B"})
+
+print("DictComp")
+print({S+str(ord(C)): S for S in x if S != "A" for C in S if C != "B"})
 
 return "Im", "Done"
 """)
