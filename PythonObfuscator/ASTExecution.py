@@ -1,6 +1,6 @@
 import ast
 
-_DEBUG = False
+_DEBUG = True
 def debugprint(*args, **kwargs):
 	if _DEBUG:
 		print("[Debug]", *args, **kwargs)
@@ -26,7 +26,7 @@ For					Implemented			Mostly untested
 AsyncFor			Not implemented
 While				Implemented
 If					Implemented			Partially tested
-With				Not implemented
+With				Implemented			Basic implementation works but unsure if there's a more complicated scenario possible
 AsyncWith			Not implemented
 
 Match				Not implemented		Switch statement (but called `case`)
@@ -54,7 +54,7 @@ NamedExpr			Implemented
 BinOp				Implemented
 UnaryOp				Implemented
 Lambda				Implemented
-IfExp				Not implemented
+IfExp				Implemented
 Dict				Implemented
 Set					Implemented
 ListComp			Implemented			Does not support an async for call
@@ -72,7 +72,7 @@ FormattedValue		Not implemented
 JoinedStr			Not implemented
 Constant			Implemented 		`kind` is ignored since idk what the point is
 
-Attribute			Implemented			Some statements manually escape evaluating this (Assign/Delete)
+Attribute			Implemented			Some statements manually escape evaluating this (Assign/Delete). That's probably fine though
 Subscript			Implemented			ditto
 Starred				Not implemented		a, *b = x | Maximum of 1 per assign expr | Must return the unpack upon evaluation (This is going to require hooks outside of Starred :/) | * only valid in Call/Assign?
 Name				Implemented
@@ -397,6 +397,9 @@ def CreateExecutionLoop(code):
 				else:
 					return False
 
+		elif exprType == ast.IfExp: #This is in and of itself an IfExp
+			return ExecuteExpression(expr.body, scope) if ExecuteExpression(expr.test, scope) else ExecuteExpression(expr.orelse, scope)
+
 		elif exprType == ast.Call:
 			func = ExecuteExpression(expr.func, scope)
 			args = []
@@ -551,6 +554,27 @@ def CreateExecutionLoop(code):
 				if out != None:
 					return out
 
+		elif stType == ast.With:
+			toExit = []
+			for item in statement.items:
+				out = ExecuteExpression(item.context_expr, scope)
+				out.__enter__()
+				toExit.append(out)
+				if item.optional_vars:
+					storeAs = ExecuteExpression(item.optional_vars, scope)
+					#If this isnt a name expr, then uh, good luck!
+					scope.setVar(storeAs, out)
+			try:
+				out = ExecuteStatList(statement.body, scope)
+			except BaseException as exc:
+				for item in toExit:
+					item.__exit__()
+				raise exc
+			else:
+				for item in toExit:
+					item.__exit__()
+				return out
+
 		elif stType == ast.Try:
 			try:
 				out = ExecuteStatList(statement.body, scope)
@@ -574,7 +598,7 @@ def CreateExecutionLoop(code):
 				if out != None:
 					return out
 			finally:
-				out = ExecuteStatList(statement.orelse, scope)
+				out = ExecuteStatList(statement.finalbody, scope)
 				if out != None:
 					return out
 
@@ -771,7 +795,7 @@ def CreateExecutionLoop(code):
 				if out.Type == "Break" or out.Type == "Continue":
 					raise SyntaxError(f"'{out.Type}' outside loop")
 				else:
-					return out.Data
+					raise SyntaxError(f"'{out.Type}' outside function")
 
 	return __main__
 
@@ -862,7 +886,20 @@ print("out=",test2())
 
 print("Decorators test done")
 
-return "Im", "Done"
+
+print("IfExp1", 1 if True else 2 if True else 3 if True else 4)
+print("IfExp2", 1 if True else 2 if False else 3 if True else 4)
+print("IfExp3", (1 if True else 2) if False else (3 if True else 4))
+
+try:
+	with open("with.txt","w") as f:
+		print("Closed?",f.closed)
+		print("file",f)
+		f.write("Test text")
+		f.dfsajasfjh()
+except:
+	print("Ignoring intentional fail")
+print("Closed?",f.closed)
 """)
 
 debugprint("AST Dump:",ast.dump(testing))
@@ -870,5 +907,5 @@ debugprint("AST Dump:",ast.dump(testing))
 debugprint("Generating execution loop")
 out = CreateExecutionLoop(testing)
 debugprint("Executing execution loop")
-final = out()
-debugprint("Finished execution loop. Final output:",final)
+out()
+debugprint("Finished execution loop")
