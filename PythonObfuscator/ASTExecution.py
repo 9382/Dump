@@ -1,6 +1,6 @@
 import ast
 
-_DEBUG = True
+_DEBUG = False
 def debugprint(*args, **kwargs):
 	if _DEBUG:
 		print("[Debug]", *args, **kwargs)
@@ -10,9 +10,9 @@ if not _DEBUG:
 """ Progress Report
 
 == Statements ==
-Name 				Status				Extra notes
+Name				Status				Extra notes
 
-FunctionDef			Implemented			Decorators not supported since I don't understand em
+FunctionDef			Implemented
 AsyncFunctionDef	Not implemented
 ClassDef			Implemented
 Return				Implemented
@@ -47,7 +47,7 @@ Continue			Implemented			Mostly untested
 
 
 == Expressions ==
-Name 				Status				Extra notes
+Name				Status				Extra notes
 
 BoolOp				Implemented
 NamedExpr			Implemented
@@ -57,10 +57,10 @@ Lambda				Implemented
 IfExp				Not implemented
 Dict				Implemented
 Set					Implemented
-ListComp			Implemented
-SetComp				Implemented
-DictComp			Implemented
-GeneratorExp		Not implemented
+ListComp			Implemented			Does not support an async for call
+SetComp				Implemented			^
+DictComp			Implemented			^
+GeneratorExp		Implemented			^
 
 Await				Not implemented
 Yield				Not implemented
@@ -82,6 +82,10 @@ Tuple				Implemented			Leaches off list generator
 Slice				Implemented			Part of Subscript. Doesn't support constants (are those a py3.8 thing even?)
 Index				Implemented			Undocumented (removed after py3.8?). Part of Subscript.
 ExtSlice			Not implemented		Removed after py3.8 (or at least changed). No idea what it actually is cause no damn example is given
+
+== Notes ==
+
+Large lack of support for async calls as of now, and variable scopes need probable work but that'll need full testing to determine
 """
 def CreateExecutionLoop(code):
 	builtins = __builtins__.__dict__
@@ -138,9 +142,9 @@ def CreateExecutionLoop(code):
 					raise SyntaxError(f"name '{var}' is used prior to global declaration")
 				elif var in self.Assignments:
 					raise SyntaxError(f"name '{var}' is assigned to before global declaration")
-				print("[!] Asked to trigger global, but this isnt implemented!")
+				raise ExecutorException("[!] Asked to trigger global, but this isnt implemented!")
 		def triggerNonlocal(self, var):
-			print("[!] Asked to trigger nonlocal, but this isnt implemented!")
+			raise ExecutorException("[!] Asked to trigger nonlocal, but this isnt implemented!")
 		def clean(self):
 			self.Variables = {}
 			self.References = {}
@@ -191,7 +195,7 @@ def CreateExecutionLoop(code):
 
 	def ParseOperator(op):
 		op = type(op)
-		#Boolean operations are not supported and are handled just in the BoolOp expr
+		#Boolean operations (and/or) are not supported and are handled just in the BoolOp expr
 		#UnaryOp
 		if op == ast.Invert:
 			return lambda x: ~x
@@ -327,6 +331,11 @@ def CreateExecutionLoop(code):
 			subScope = VariableScope(scope, "generator")
 			out = ParseGenerators(expr.generators, [expr.elt], subScope)
 			return {x[0] for x in out}
+
+		elif exprType == ast.GeneratorExp:
+			subScope = VariableScope(scope, "generator")
+			out = ParseGenerators(expr.generators, [expr.elt], subScope)
+			return (x[0] for x in out)
 
 		elif exprType == ast.Index: #Warning: Undocumented. Likely removed after py3.8
 			return ExecuteExpression(expr.value, scope)
@@ -582,6 +591,7 @@ def CreateExecutionLoop(code):
 						return out.Data
 			FunctionHandler.__name__ = statement.name
 			FunctionHandler.__qualname__ = statement.name #Technically a bit wrong but eh
+			FunctionHandler = ImplementObjectDecorators(FunctionHandler, statement.decorator_list, scope)
 			scope.setVar(statement.name, FunctionHandler)
 
 		elif stType == ast.ClassDef:
@@ -597,6 +607,7 @@ def CreateExecutionLoop(code):
 			out = ExecuteStatList(statement.body, subScope) #We shouldn't end early, period
 			if out != None:
 				raise SyntaxError(f"Now that is just illegal class logic, I don't even know what to say anymore")
+			DummyClass = ImplementObjectDecorators(DummyClass, statement.decorator_list, scope)
 			scope.setVar(statement.name, DummyClass)
 
 		else:
@@ -693,6 +704,12 @@ def CreateExecutionLoop(code):
 		elif len(kwargCollector) > 0:
 			raise TypeError(f"{representation}() received too many keyword arguments")
 
+	def ImplementObjectDecorators(obj, decorators, scope):
+		for i in range(len(decorators)-1, -1, -1): #Traverse in reverse order
+			decorator = ExecuteExpression(decorators[i], scope)
+			obj = decorator(obj)
+		return obj
+
 	#x = ["A", "DD", "B", "CCBC"]
 	#print([S+str(ord(C)) for S in x if S != "A" for C in S if C != "B"])
 	def ParseGenerators(generators, toEvaluate, scope):
@@ -726,10 +743,15 @@ def CreateExecutionLoop(code):
 	def __main__():
 		scope = VariableScope(None, "core")
 		debugprint("Input code:",code)
+		if _DEBUG:
+			beforeRun = ast.dump(finalCode)
 		try:
 			out = ExecuteStatList(finalCode.body, scope)
 		except BaseException as exc:
 			if _DEBUG:
+				afterRun = ast.dump(finalCode)
+				if beforeRun != afterRun:
+					debugprint("[!] The AST has been modified during execution. New AST:",afterRun)
 				debugprint("[!] We ran into a critical error")
 				if _DEBUG_LastExpr:
 					debugprint("Last expression:",ast.dump(_DEBUG_LastExpr))
@@ -741,6 +763,10 @@ def CreateExecutionLoop(code):
 					debugprint("Last statement: None")
 			raise exc
 		else:
+			if _DEBUG:
+				afterRun = ast.dump(finalCode)
+				if beforeRun != afterRun:
+					debugprint("[!] The AST has been modified during execution. New AST:",afterRun)
 			if out:
 				if out.Type == "Break" or out.Type == "Continue":
 					raise SyntaxError(f"'{out.Type}' outside loop")
@@ -788,13 +814,53 @@ print(x,y,z)
 x = ["A", "DD", "B", "CCBC"]
 
 print("ListComp")
-print([S+str(ord(C)) for S in x if S != "A" for C in S if C != "B"])
+obj = [S+str(ord(C)) for S in x if S != "A" for C in S if C != "B"]
+print(type(obj), obj)
 
 print("SetComp")
-print({S+str(ord(C)) for S in x if S != "A" for C in S if C != "B"})
+obj = {S+str(ord(C)) for S in x if S != "A" for C in S if C != "B"}
+print(type(obj), obj)
 
 print("DictComp")
-print({S+str(ord(C)): S for S in x if S != "A" for C in S if C != "B"})
+obj = {S+str(ord(C)): S for S in x if S != "A" for C in S if C != "B"}
+print(type(obj), obj)
+
+print("Generator")
+gen = (S+str(ord(C)) for S in x if S != "A" for C in S if C != "B")
+print(type(gen), gen)
+for v in gen:
+	print("Gen object entry",v)
+
+def d1(obj):
+	print("Hooking obj in D1...")
+	def ret():
+		print("D1 hook on",obj)
+		return obj()
+	return ret
+def d2(obj):
+	print("Hooking obj in D2...")
+	def ret():
+		print("D2 hook on",obj)
+		return obj()
+	return ret
+
+print("Decorators test 1")
+@d1
+@d2
+def test():
+	print("This is test")
+	return True
+print("out=",test())
+
+print("Test part 2")
+@d1
+@d2
+class test2:
+	print("Executing body of test")
+print("Running test")
+print("out=",test2())
+
+print("Decorators test done")
 
 return "Im", "Done"
 """)
