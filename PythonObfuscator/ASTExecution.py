@@ -285,7 +285,7 @@ def CreateExecutionLoop(code):
 			if type(target) == tuple or type(target) == list:
 				raise SyntaxError(f"cannot use assignment expressions with {type(target)}")
 			scope.setVar(target, value)
-			return ast.Name(target, ast.Load())
+			return value
 
 		elif exprType == ast.Starred:
 			ctx = ForcedContext or type(expr.ctx)
