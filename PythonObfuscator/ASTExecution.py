@@ -74,7 +74,7 @@ Constant			Implemented 		`kind` is ignored since idk what the point is
 
 Attribute			Implemented			Some statements manually escape evaluating this (Assign/Delete). That's probably fine though
 Subscript			Implemented			ditto
-Starred				Not implemented		a, *b = x | Maximum of 1 per assign expr | Must return the unpack upon evaluation (This is going to require hooks outside of Starred :/) | * only valid in Call/Assign?
+Starred				Implemented			only valid in Call/Assign - or at least I think so. Currently no punishment for >1 Starred expr in Assign
 Name				Implemented
 List				Implemented
 Tuple				Implemented			Leaches off list generator
@@ -143,6 +143,8 @@ def CreateExecutionLoop(code):
 				elif var in self.Assignments:
 					raise SyntaxError(f"name '{var}' is assigned to before global declaration")
 				raise ExecutorException("[!] Asked to trigger global, but this isnt implemented!")
+				# if scope.Parent:
+				# 	scope.Parent.triggerGlobal(var)
 		def triggerNonlocal(self, var):
 			raise ExecutorException("[!] Asked to trigger nonlocal, but this isnt implemented!")
 		def clean(self):
@@ -285,6 +287,15 @@ def CreateExecutionLoop(code):
 			scope.setVar(target, value)
 			return ast.Name(target, ast.Load())
 
+		elif exprType == ast.Starred:
+			ctx = ForcedContext or type(expr.ctx)
+			if ctx == ast.Load:
+				return ExecuteExpression(expr.value, scope)
+			elif ctx == ast.Store:
+				return ExecuteExpression(expr.value, scope)
+			elif ctx == ast.Del:
+				raise ExecutorException("Direct call to evaluate a Starred expression")
+
 		elif exprType == ast.Attribute:
 			ctx = ForcedContext or type(expr.ctx)
 			if ctx == ast.Load:
@@ -298,13 +309,13 @@ def CreateExecutionLoop(code):
 			return expr.arg, ExecuteExpression(expr.value, scope)
 
 		elif exprType == ast.Tuple:
-			return tuple([ExecuteExpression(entry, scope) for entry in expr.elts])
+			return tuple(ExecuteExpression(entry, scope) for entry in expr.elts)
 
 		elif exprType == ast.List:
-			return [ExecuteExpression(entry, scope) for entry in expr.elts]
+			return list(ExecuteExpression(entry, scope) for entry in expr.elts)
 
 		elif exprType == ast.Set:
-			return set([ExecuteExpression(entry, scope) for entry in expr.elts])
+			return set(ExecuteExpression(entry, scope) for entry in expr.elts)
 
 		elif exprType == ast.Dict:
 			out = {}
@@ -344,7 +355,6 @@ def CreateExecutionLoop(code):
 			lower = expr.lower and ExecuteExpression(expr.lower, scope)
 			upper = expr.upper and ExecuteExpression(expr.upper, scope)
 			step = expr.step and ExecuteExpression(expr.step, scope)
-			debugprint(f"Slice= {lower}:{upper}:{step} or",slice(lower, upper, step))
 			return slice(lower, upper, step)
 
 		elif exprType == ast.Subscript:
@@ -404,11 +414,18 @@ def CreateExecutionLoop(code):
 			func = ExecuteExpression(expr.func, scope)
 			args = []
 			for entry in expr.args:
-				args.append(ExecuteExpression(entry, scope))
+				if type(entry) == ast.Starred:
+					args.extend(ExecuteExpression(entry, scope))
+				else:
+					args.append(ExecuteExpression(entry, scope))
 			kwargs = {}
 			for entry in expr.keywords:
 				name, value = ExecuteExpression(entry, scope)
-				kwargs[name] = value
+				if name:
+					kwargs[name] = value
+				else:
+					kwargs.update(value)
+
 			return func(*args, **kwargs)
 
 		elif exprType == ast.Lambda:
@@ -451,13 +468,25 @@ def CreateExecutionLoop(code):
 				elif type(target) == ast.Tuple or type(target) == ast.List:
 					if type(value) != tuple and type(value) != list:
 						raise TypeError(f"cannot unpack non-iterable {type(value)} object")
-					elif len(target.elts) < len(value):
+					for i in range(len(target.elts)):
+						item = target.elts[i]
+						if type(item) == ast.Starred:
+							offset = len(value)-len(target.elts)
+							for lower in range(i):
+								Assign(target.elts[lower], value[lower])
+							scope.setVar(ExecuteExpression(item, scope), list(value[i:offset+i+1]))
+							for upper in range(i+1,len(target.elts)):
+								Assign(target.elts[upper], value[upper+offset])
+							return
+					if len(target.elts) < len(value):
 						raise ValueError(f"not enough values to unpack (expected {len(target.elts)}, got {len(value)})")
 					elif len(target.elts) > len(value):
 						raise ValueError(f"too many values to unpack (expected {len(target.elts)})")
 					else:
 						for i in range(len(target.elts)):
 							Assign(target.elts[i], value[i])
+				elif type(target) == ast.Starred:
+					raise SyntaxError("starred assignment target must be in a list or tuple")
 				else:
 					raise ExecutorException(f"Unable to assign to unrecognised type '{type(target)}'")
 			value = ExecuteExpression(statement.value, scope)
@@ -891,15 +920,33 @@ print("IfExp1", 1 if True else 2 if True else 3 if True else 4)
 print("IfExp2", 1 if True else 2 if False else 3 if True else 4)
 print("IfExp3", (1 if True else 2) if False else (3 if True else 4))
 
-try:
-	with open("with.txt","w") as f:
-		print("Closed?",f.closed)
-		print("file",f)
-		f.write("Test text")
-		f.dfsajasfjh()
-except:
-	print("Ignoring intentional fail")
-print("Closed?",f.closed)
+# try:
+# 	with open("with.txt","w") as f:
+# 		print("Closed?",f.closed)
+# 		print("file",f)
+# 		f.write("Test text")
+# 		f.dfsajasfjh()
+# except:
+# 	print("Ignoring intentional fail")
+# print("Closed?",f.closed)
+
+x = [2,3,4]
+y = {2:3, 4:5}
+y2 = {"end":"A\\n"}
+print(1,[x],5)
+print(1,*[x],5)
+print(1, y, 6)
+print(1, *y, 6)
+print(1, 2, y2)
+print(1, 2, *y2)
+print(1, 2, **y2)
+
+(n,*y,n) = 1,2,3
+print(n,y)
+a,*y,b,c = 1,2,3,4,5
+print(a,y,b,c)
+a,b,*y,c = 1,2,3,4,5
+print(a,b,y,c)
 """)
 
 debugprint("AST Dump:",ast.dump(testing))
