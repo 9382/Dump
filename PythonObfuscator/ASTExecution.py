@@ -479,44 +479,13 @@ def CreateExecutionLoop(code):
 					scope.deleteVar(ExecuteExpression(target, scope))
 
 		elif stType == ast.Assign or stType == ast.AnnAssign:
-			def Assign(target, value):
-				if type(target) == ast.Name:
-					scope.setVar(ExecuteExpression(target, scope), value)
-				elif type(target) == ast.Attribute:
-					setattr(ExecuteExpression(target.value, scope), target.attr, value)
-				elif type(target) == ast.Subscript:
-					ExecuteExpression(target.value, scope)[ExecuteExpression(target.slice, scope)] = value
-				elif type(target) == ast.Tuple or type(target) == ast.List:
-					if type(value) != tuple and type(value) != list:
-						raise TypeError(f"cannot unpack non-iterable {type(value)} object")
-					for i in range(len(target.elts)):
-						item = target.elts[i]
-						if type(item) == ast.Starred:
-							offset = len(value)-len(target.elts)
-							for lower in range(i):
-								Assign(target.elts[lower], value[lower])
-							scope.setVar(ExecuteExpression(item, scope), list(value[i:offset+i+1]))
-							for upper in range(i+1,len(target.elts)):
-								Assign(target.elts[upper], value[upper+offset])
-							return
-					if len(target.elts) < len(value):
-						raise ValueError(f"not enough values to unpack (expected {len(target.elts)}, got {len(value)})")
-					elif len(target.elts) > len(value):
-						raise ValueError(f"too many values to unpack (expected {len(target.elts)})")
-					else:
-						for i in range(len(target.elts)):
-							Assign(target.elts[i], value[i])
-				elif type(target) == ast.Starred:
-					raise SyntaxError("starred assignment target must be in a list or tuple")
-				else:
-					raise ExecutorException(f"Unable to assign to unrecognised type '{type(target)}'")
 			if stType == ast.Assign:
 				value = ExecuteExpression(statement.value, scope)
 				for target in statement.targets:
-					Assign(target, value)
+					Assign(target, value, scope)
 			elif stType == ast.AnnAssign:
 				if statement.value:
-					Assign(statement.target, ExecuteExpression(statement.value, scope))
+					Assign(statement.target, ExecuteExpression(statement.value, scope), scope)
 				#else: Literally just decorative, don't care, don't process it
 		elif stType == ast.AugAssign:
 			value = ExecuteExpression(statement.value, scope)
@@ -585,10 +554,9 @@ def CreateExecutionLoop(code):
 				return ExecuteStatList(statement.orelse, scope)
 
 		elif stType == ast.For:
-			target = ExecuteExpression(statement.target, scope)
 			iterRange = ExecuteExpression(statement.iter, scope)
 			for value in iterRange:
-				scope.setVar(target, value)
+				Assign(statement.target, value, scope)
 				out = ExecuteStatList(statement.body, scope)
 				if out != None:
 					if out.Type == "Break":
@@ -711,6 +679,39 @@ def CreateExecutionLoop(code):
 			out = ExecuteStatement(statement, scope)
 			if out != None: #Send off our return/break/continue statement
 				return out
+
+	#Who doesn't love "for x,*y in z:" being a valid statement that you have to accomodate for!
+	def Assign(target, value, scope):
+		if type(target) == ast.Name:
+			scope.setVar(ExecuteExpression(target, scope), value)
+		elif type(target) == ast.Attribute:
+			setattr(ExecuteExpression(target.value, scope), target.attr, value)
+		elif type(target) == ast.Subscript:
+			ExecuteExpression(target.value, scope)[ExecuteExpression(target.slice, scope)] = value
+		elif type(target) == ast.Tuple or type(target) == ast.List:
+			if type(value) != tuple and type(value) != list:
+				raise TypeError(f"cannot unpack non-iterable {type(value)} object")
+			for i in range(len(target.elts)):
+				item = target.elts[i]
+				if type(item) == ast.Starred:
+					offset = len(value)-len(target.elts)
+					for lower in range(i):
+						Assign(target.elts[lower], value[lower], scope)
+					scope.setVar(ExecuteExpression(item, scope), list(value[i:offset+i+1]))
+					for upper in range(i+1,len(target.elts)):
+						Assign(target.elts[upper], value[upper+offset], scope)
+					return
+			if len(target.elts) < len(value):
+				raise ValueError(f"not enough values to unpack (expected {len(target.elts)}, got {len(value)})")
+			elif len(target.elts) > len(value):
+				raise ValueError(f"too many values to unpack (expected {len(target.elts)})")
+			else:
+				for i in range(len(target.elts)):
+					Assign(target.elts[i], value[i], scope)
+		elif type(target) == ast.Starred:
+			raise SyntaxError("starred assignment target must be in a list or tuple")
+		else:
+			raise ExecutorException(f"Unable to assign to unrecognised type '{type(target)}'")
 
 	#def f2(x, y, z=None, *, a, b, c=None, **k):
 	#	print('Cool')
@@ -1046,6 +1047,13 @@ from imptest import imptest_file2 as b2, imptest2 as mod
 print("imptest_file2=",b2,"imptest2=",mod)
 from imptest.imptest2 import imptest_subfile
 print("imptest_subfile=",imptest_subfile)
+
+## Testing for statements, just cause
+x = {1:2, 3:4}
+for y in x:
+	print("fy",y)
+for y,z in x.items():
+	print("fyz",y,z)
 """)
 
 debugprint("AST Dump:",ast.dump(testing))
