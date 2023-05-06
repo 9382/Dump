@@ -295,16 +295,16 @@ def CreateExecutionLoop(code):
 			elif ctx == ast.Store:
 				return ExecuteExpression(expr.value, scope)
 			elif ctx == ast.Del:
-				raise ExecutorException("Direct call to evaluate a Starred expression")
+				raise ExecutorException("Direct call to evaluate a Starred del expression")
 
 		elif exprType == ast.Attribute:
 			ctx = ForcedContext or type(expr.ctx)
 			if ctx == ast.Load:
 				return getattr(ExecuteExpression(expr.value, scope), expr.attr)
 			elif ctx == ast.Store:
-				raise ExecutorException("This shouldn't get called") #stmt.Assign shouldn't let a Store call creep into here. If it does, panic
+				raise ExecutorException("Direct call to evaluate an Attribute store expression") #stmt.Assign shouldn't let a Store call creep into here. If it does, panic
 			elif ctx == ast.Del:
-				raise ExecutorException("This shouldn't get called") #ditto for stmt.Delete
+				raise ExecutorException("Direct call to evaluate an Attribute del expression") #ditto for stmt.Delete
 
 		elif exprType == ast.JoinedStr:
 			return str().join(ExecuteExpression(value, scope) for value in expr.values)
@@ -326,32 +326,19 @@ def CreateExecutionLoop(code):
 		elif exprType == ast.keyword:
 			return expr.arg, ExecuteExpression(expr.value, scope)
 
-		elif exprType == ast.Tuple:
+		elif exprType in [ast.Tuple, ast.List, ast.Set]:
 			out = []
 			for entry in expr.elts:
 				if type(entry) == ast.Starred:
 					out.extend(ExecuteExpression(entry, scope))
 				else:
 					out.append(ExecuteExpression(entry, scope))
-			return tuple(out)
-
-		elif exprType == ast.List:
-			out = []
-			for entry in expr.elts:
-				if type(entry) == ast.Starred:
-					out.extend(ExecuteExpression(entry, scope))
-				else:
-					out.append(ExecuteExpression(entry, scope))
-			return out
-
-		elif exprType == ast.Set:
-			out = []
-			for entry in expr.elts:
-				if type(entry) == ast.Starred:
-					out.extend(ExecuteExpression(entry, scope))
-				else:
-					out.append(ExecuteExpression(entry, scope))
-			return set(out)
+			if exprType == ast.Tuple:
+				return tuple(out)
+			elif exprType == ast.List:
+				return out
+			elif exprType == ast.Set:
+				return set(out)
 
 		elif exprType == ast.Dict:
 			out = {}
@@ -364,27 +351,22 @@ def CreateExecutionLoop(code):
 					out[ExecuteExpression(key, scope)] = ExecuteExpression(value, scope)
 			return out
 
-		elif exprType == ast.ListComp:
+		elif exprType in [ast.ListComp, ast.SetComp, ast.GeneratorExp]:
 			subScope = VariableScope(scope, "generator")
 			out = ParseGenerators(expr.generators, [expr.elt], subScope)
-			return [x[0] for x in out]
+			if exprType == ast.ListComp:
+				return [x[0] for x in out]
+			elif exprType == ast.SetComp:
+				return {x[0] for x in out}
+			elif exprType == ast.GeneratorExp:
+				return (x[0] for x in out)
 
 		elif exprType == ast.DictComp:
 			subScope = VariableScope(scope, "generator")
 			out = ParseGenerators(expr.generators, [expr.key, expr.value], subScope)
 			return {x[0]: x[1] for x in out}
 
-		elif exprType == ast.SetComp:
-			subScope = VariableScope(scope, "generator")
-			out = ParseGenerators(expr.generators, [expr.elt], subScope)
-			return {x[0] for x in out}
-
-		elif exprType == ast.GeneratorExp:
-			subScope = VariableScope(scope, "generator")
-			out = ParseGenerators(expr.generators, [expr.elt], subScope)
-			return (x[0] for x in out)
-
-		elif exprType == ast.Index: #Warning: Undocumented. Likely removed after py3.8
+		elif exprType == ast.Index:
 			return ExecuteExpression(expr.value, scope)
 
 		elif exprType == ast.Slice:
@@ -582,13 +564,9 @@ def CreateExecutionLoop(code):
 
 		elif stType == ast.If:
 			if ExecuteExpression(statement.test, scope):
-				out = ExecuteStatList(statement.body, scope)
-				if out != None:
-					return out
+				return ExecuteStatList(statement.body, scope)
 			else:
-				out = ExecuteStatList(statement.orelse, scope)
-				if out != None:
-					return out
+				return ExecuteStatList(statement.orelse, scope)
 
 		elif stType == ast.While:
 			while ExecuteExpression(statement.test, scope):
@@ -601,9 +579,7 @@ def CreateExecutionLoop(code):
 					elif out.Type == "Return":
 						return out
 			else:
-				out = ExecuteStatList(statement.orelse, scope)
-				if out != None:
-					return out
+				return ExecuteStatList(statement.orelse, scope)
 
 		elif stType == ast.For:
 			target = ExecuteExpression(statement.target, scope)
@@ -619,9 +595,7 @@ def CreateExecutionLoop(code):
 					elif out.Type == "Return":
 						return out
 			else:
-				out = ExecuteStatList(statement.orelse, scope)
-				if out != None:
-					return out
+				return ExecuteStatList(statement.orelse, scope)
 
 		elif stType == ast.With:
 			toExit = []
@@ -667,9 +641,7 @@ def CreateExecutionLoop(code):
 				if out != None:
 					return out
 			finally:
-				out = ExecuteStatList(statement.finalbody, scope)
-				if out != None:
-					return out
+				return ExecuteStatList(statement.finalbody, scope)
 
 
 		elif stType == ast.FunctionDef:
