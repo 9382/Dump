@@ -617,9 +617,14 @@ def CreateExecutionLoop(code):
 			for name in statement.names:
 				target, storedName = name.name, name.asname
 				out = __import__(target, globals(), locals(), [], 0)
-				for term in target.split(".")[1:]: #This looks scary but I think it's valid
-					out = out.__dict__[term]
-				scope.setVar(storedName or target, out)
+				if storedName:
+					for term in target.split(".")[1:]: #This looks scary but I think it's valid
+						out = out.__dict__[term]
+					scope.setVar(storedName, out)
+				else:
+					scope.setVar(target, out)
+				#The above code is incredibly confusing, but feels accurate.
+				#E.g. import urllib.parse imports urllib, while import urllib.parse as y imports just urllib.parse (as y)
 
 		elif stType == ast.ImportFrom:
 			module = statement.module
