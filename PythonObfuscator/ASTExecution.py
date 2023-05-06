@@ -68,8 +68,8 @@ YieldFrom			Not implemented
 
 Compare				Implemented
 Call				Implemented
-FormattedValue		Not implemented
-JoinedStr			Not implemented
+FormattedValue		Implemented
+JoinedStr			Implemented
 Constant			Implemented 		`kind` is ignored since idk what the point is
 
 Attribute			Implemented			Some statements manually escape evaluating this (Assign/Delete). That's probably fine though
