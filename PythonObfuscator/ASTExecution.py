@@ -115,6 +115,8 @@ def CreateExecutionLoop(code):
 					raise NameError(f"name '{var}' is not defined")
 		def setVarRaw(self, var, value): #Bypass scope-based checks
 			debugprint("Asked to raw set variable",var)
+			if type(var) != str:
+				raise ExecutorException(f"Attempted to set a variable of type {type(var)}")
 			if var in self.References and var not in self.Assignments:
 				raise UnboundLocalError(f"local variable '{var}' referenced before assignment")
 			if var in self.Globals:
