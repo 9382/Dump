@@ -20,7 +20,7 @@ Return				Implemented
 Delete				Implemented
 Assign				Implemented
 AugAssign			Implemented			Support for an __iXYZ__ attr check? possibly OTT
-AnnAssign			Not implemented
+AnnAssign			Implemented			Literally just a glorified Assign
 
 For					Implemented			Mostly untested
 AsyncFor			Not implemented
@@ -493,7 +493,7 @@ def CreateExecutionLoop(code):
 				else:
 					scope.deleteVar(ExecuteExpression(target, scope))
 
-		elif stType == ast.Assign:
+		elif stType == ast.Assign or stType == ast.AnnAssign:
 			def Assign(target, value):
 				if type(target) == ast.Name:
 					scope.setVar(ExecuteExpression(target, scope), value)
@@ -525,10 +525,14 @@ def CreateExecutionLoop(code):
 					raise SyntaxError("starred assignment target must be in a list or tuple")
 				else:
 					raise ExecutorException(f"Unable to assign to unrecognised type '{type(target)}'")
-			value = ExecuteExpression(statement.value, scope)
-			for target in statement.targets:
-				Assign(target, value)
-
+			if stType == ast.Assign:
+				value = ExecuteExpression(statement.value, scope)
+				for target in statement.targets:
+					Assign(target, value)
+			elif stType == ast.AnnAssign:
+				if statement.value:
+					Assign(statement.target, ExecuteExpression(statement.value, scope))
+				#else: Literally just decorative, don't care, don't process it
 		elif stType == ast.AugAssign:
 			value = ExecuteExpression(statement.value, scope)
 			target = statement.target
@@ -1021,6 +1025,13 @@ print("u.w exists?",hasattr(u,"w"))
 print("u.x exists?",hasattr(u,"x"))
 print("u.o exists?",hasattr(u,"o"))
 w(1)
+
+## Testing AnnAssign
+a = 1
+b: int = "2"
+print(a,type(a))
+print(b,type(b))
+c: int #Does literally nothing but is valid syntax :/
 """)
 
 debugprint("AST Dump:",ast.dump(testing))
