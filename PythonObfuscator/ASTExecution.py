@@ -36,7 +36,7 @@ Try					Implemented			Mostly untested
 Assert				Implemented
 
 Import				Implemented
-ImportFrom			Implemented
+ImportFrom			Implemented			Very poor behaviour when importing * with a module with no defined __all__
 
 Global				Implemented			Tested but still not confident it's perfect
 Nonlocal			Implemented			ditto
@@ -84,8 +84,7 @@ Index				Implemented			Undocumented (removed after py3.8?). Part of Subscript.
 ExtSlice			Not implemented		Removed after py3.8 (or at least changed). No idea what it actually is cause no damn example is given
 
 == Notes ==
-
-Large lack of support for async calls as of now, and variable scopes need probable work but that'll need full testing to determine
+Currently, the main thing actually missing is async / yield support, which has absolutely no implementation right now. That'll likely need a *lot* of looking into it, and that isn't gonna be fun
 """
 def CreateExecutionLoop(code):
 	builtins = __builtins__.__dict__
@@ -657,9 +656,20 @@ def CreateExecutionLoop(code):
 			module = statement.module
 			for name in statement.names:
 				target, storedName = name.name, name.asname
-				out = __import__(module, globals(), locals(), [target], statement.level)
-				out = out.__dict__[target]
-				scope.setVar(storedName or target, out)
+				if target == "*":
+					out = __import__(module, globals(), locals(), [], statement.level)
+					for term in module.split(".")[1:]:
+						out = out.__dict__[term]
+					if "__all__" in out.__dict__:
+						for term in out.__dict__["__all__"]:
+							scope.setVar(term, out.__dict__[term])
+					else:
+						for key, value in out.__dict__: #This exposes too much data
+							scope.setVar(term, out.__dict__[term])
+				else:
+					out = __import__(module, globals(), locals(), [target], statement.level)
+					out = out.__dict__[target]
+					scope.setVar(storedName or target, out)
 
 		elif stType == ast.FunctionDef:
 			def FunctionHandler(*args, **kwargs):
@@ -1028,8 +1038,8 @@ print(xy)
 print(xy.__dict__)
 
 # import imptest.imptest_file as tt
-from imptest import imptest_file as tt
-print(tt)
+from imptest.imptest_file2 import *
+print(xx)
 
 from imptest import imptest_file2 as b2, imptest2 as mod
 print("imptest_file2=",b2,"imptest2=",mod)
