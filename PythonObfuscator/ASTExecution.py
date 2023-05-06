@@ -74,7 +74,7 @@ Constant			Implemented 		`kind` is ignored since idk what the point is
 
 Attribute			Implemented			Some statements manually escape evaluating this (Assign/Delete). That's probably fine though
 Subscript			Implemented			ditto
-Starred				Implemented			only valid in Call/Assign - or at least I think so. Currently no punishment for >1 Starred expr in Assign
+Starred				Implemented			Currently no punishment for >1 Starred expr in Assign. Implemented manually into multiple methods since there's no simple way to provide an unpacking :/
 Name				Implemented
 List				Implemented
 Tuple				Implemented			Leaches off list generator
@@ -305,17 +305,52 @@ def CreateExecutionLoop(code):
 			elif ctx == ast.Del:
 				raise ExecutorException("This shouldn't get called") #ditto for stmt.Delete
 
+		elif exprType == ast.JoinedStr:
+			return str().join(ExecuteExpression(value, scope) for value in expr.values)
+
+		elif exprType == ast.FormattedValue:
+			value = ExecuteExpression(expr.value, scope)
+			if expr.conversion == 115:
+				value = str(value)
+			elif expr.conversion == 114:
+				value = repr(value)
+			elif expr.conversion == 97:
+				value = ascii(value)
+			if expr.format_spec:
+				value = format(value, ExecuteExpression(expr.format_spec, scope))
+			else:
+				value = format(value)
+			return value
+
 		elif exprType == ast.keyword:
 			return expr.arg, ExecuteExpression(expr.value, scope)
 
 		elif exprType == ast.Tuple:
-			return tuple(ExecuteExpression(entry, scope) for entry in expr.elts)
+			out = []
+			for entry in expr.elts:
+				if type(entry) == ast.Starred:
+					out.extend(ExecuteExpression(entry, scope))
+				else:
+					out.append(ExecuteExpression(entry, scope))
+			return tuple(out)
 
 		elif exprType == ast.List:
-			return list(ExecuteExpression(entry, scope) for entry in expr.elts)
+			out = []
+			for entry in expr.elts:
+				if type(entry) == ast.Starred:
+					out.extend(ExecuteExpression(entry, scope))
+				else:
+					out.append(ExecuteExpression(entry, scope))
+			return out
 
 		elif exprType == ast.Set:
-			return set(ExecuteExpression(entry, scope) for entry in expr.elts)
+			out = []
+			for entry in expr.elts:
+				if type(entry) == ast.Starred:
+					out.extend(ExecuteExpression(entry, scope))
+				else:
+					out.append(ExecuteExpression(entry, scope))
+			return set(out)
 
 		elif exprType == ast.Dict:
 			out = {}
@@ -947,6 +982,14 @@ a,*y,b,c = 1,2,3,4,5
 print(a,y,b,c)
 a,b,*y,c = 1,2,3,4,5
 print(a,b,y,c)
+
+x = [5, True]
+y = [*x, 8]
+z = [*y, *x, "A", 1]
+print("x", x, "y", y, "z", z)
+print(f"A{x*3}B{y}C{z*2}")
+b = 5.4321
+print(f"{b:2.3}")
 """)
 
 debugprint("AST Dump:",ast.dump(testing))
