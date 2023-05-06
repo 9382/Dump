@@ -110,7 +110,7 @@ def CreateExecutionLoop(code):
 				if self.Parent:
 					return self.Parent.getVar(var)
 				elif hasattr(builtins,var):
-                    return getattr(builtins,var)
+					return getattr(builtins,var)
 				else:
 					raise NameError(f"name '{var}' is not defined")
 		def setVarRaw(self, var, value): #Bypass scope-based checks
