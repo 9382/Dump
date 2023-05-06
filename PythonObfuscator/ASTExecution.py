@@ -13,7 +13,7 @@ if not _DEBUG:
 Name				Status				Extra notes
 
 FunctionDef			Implemented
-AsyncFunctionDef	Not implemented
+AsyncFunctionDef	Implemented			Useless until an implementation for await is figured out, but might as well have it
 ClassDef			Implemented
 Return				Implemented
 
@@ -62,7 +62,7 @@ SetComp				Implemented			^
 DictComp			Implemented			^
 GeneratorExp		Implemented			^
 
-Await				Not implemented
+Await				Not implemented		I despise this expression, and for good reason too
 Yield				Not implemented
 YieldFrom			Not implemented
 
@@ -85,6 +85,9 @@ ExtSlice			Not implemented		Removed after py3.8 (or at least changed). No idea w
 
 == Notes ==
 Currently, the main thing actually missing is async / yield support, which has absolutely no implementation right now. That'll likely need a *lot* of looking into it, and that isn't gonna be fun
+
+Await is going to be incredibly complex to implement - we don't want everything here to be async too (hell, we can't do that thanks to FunctionDef), but overrunning asyncio.run is apparently illegal, which is unhelpful
+It's possible to run some async functions, E.g. using .send(None), but this won't respect blocking functions like asyncio.sleep, which is a big problem
 """
 def CreateExecutionLoop(code):
 	import builtins
@@ -447,7 +450,6 @@ def CreateExecutionLoop(code):
 					kwargs[name] = value
 				else:
 					kwargs.update(value)
-
 			return func(*args, **kwargs)
 
 		elif exprType == ast.Lambda:
@@ -459,7 +461,6 @@ def CreateExecutionLoop(code):
 
 		else:
 			raise ExecutorException(f"[!] Unimplemented expression type {exprType}")
-
 
 	def ExecuteStatement(statement, scope):
 		nonlocal _DEBUG_LastStatement
@@ -644,6 +645,21 @@ def CreateExecutionLoop(code):
 
 		elif stType == ast.FunctionDef:
 			def FunctionHandler(*args, **kwargs):
+				subScope = VariableScope(scope, "function")
+				HandleArgAssignment(subScope, statement, args, kwargs)
+				out = ExecuteStatList(statement.body, subScope)
+				if out != None:
+					if out.Type == "Break" or out.Type == "Continue":
+						raise SyntaxError(f"'{out.Type}' outside loop")
+					else:
+						return out.Data
+			FunctionHandler.__name__ = statement.name
+			FunctionHandler.__qualname__ = statement.name #Technically a bit wrong but eh
+			FunctionHandler = ImplementObjectDecorators(FunctionHandler, statement.decorator_list, scope)
+			scope.setVar(statement.name, FunctionHandler)
+
+		elif stType == ast.AsyncFunctionDef:
+			async def FunctionHandler(*args, **kwargs):
 				subScope = VariableScope(scope, "function")
 				HandleArgAssignment(subScope, statement, args, kwargs)
 				out = ExecuteStatList(statement.body, subScope)
