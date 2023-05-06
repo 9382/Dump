@@ -117,10 +117,11 @@ def CreateExecutionLoop(code):
 			debugprint("Asked to raw set variable",var)
 			if type(var) != str:
 				raise ExecutorException(f"Attempted to set a variable of type {type(var)}")
+			if var in self.Globals or var in self.NonLocals:
+				self.Parent.setVarRaw(var, value)
+				return
 			if var in self.References and var not in self.Assignments:
 				raise UnboundLocalError(f"local variable '{var}' referenced before assignment")
-			if var in self.Globals:
-				self.Parent.setVarRaw(var, value) #A global call will always reach the top level, so the fact we use raw doesnt matter
 			self.Variables[var] = value
 			self.Assignments.add(var)
 		def setVar(self, var, value):
