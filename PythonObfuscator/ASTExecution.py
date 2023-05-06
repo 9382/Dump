@@ -35,8 +35,8 @@ Raise				Implemented
 Try					Implemented			Mostly untested
 Assert				Implemented
 
-Import				Not implemented
-ImportFrom			Not implemented
+Import				Implemented
+ImportFrom			Implemented
 
 Global				Implemented			Tested but still not confident it's perfect
 Nonlocal			Implemented			ditto
@@ -93,7 +93,10 @@ def CreateExecutionLoop(code):
 	class VariableScope:
 		def __init__(self, Parent, scopeType):
 			self.Parent = Parent
-			self.Variables = {}
+			if scopeType == "core":
+				self.Variables = globals()
+			else:
+				self.Variables = {}
 			self.scopeType = scopeType
 			self.References = set()
 			self.Assignments = set()
@@ -626,7 +629,6 @@ def CreateExecutionLoop(code):
 			except ExecutorException as exc: #Executor errors are not to reach the source code ever
 				raise exc
 			except BaseException as exc:
-				debugprint("We had a try call fail",exc)
 				for handler in statement.handlers:
 					if handler.type == None or isinstance(exc, ExecuteExpression(handler.type, scope)):
 						subScope = VariableScope(scope, "asclause")
@@ -643,6 +645,21 @@ def CreateExecutionLoop(code):
 			finally:
 				return ExecuteStatList(statement.finalbody, scope)
 
+		elif stType == ast.Import:
+			for name in statement.names:
+				target, storedName = name.name, name.asname
+				out = __import__(target, globals(), locals(), [], 0)
+				for term in target.split(".")[1:]: #This looks scary but I think it's valid
+					out = out.__dict__[term]
+				scope.setVar(storedName or target, out)
+
+		elif stType == ast.ImportFrom:
+			module = statement.module
+			for name in statement.names:
+				target, storedName = name.name, name.asname
+				out = __import__(module, globals(), locals(), [target], statement.level)
+				out = out.__dict__[target]
+				scope.setVar(storedName or target, out)
 
 		elif stType == ast.FunctionDef:
 			def FunctionHandler(*args, **kwargs):
@@ -1004,6 +1021,20 @@ b: int = "2"
 print(a,type(a))
 print(b,type(b))
 c: int #Does literally nothing but is valid syntax :/
+
+## Testing imports
+import imptest as xy
+print(xy)
+print(xy.__dict__)
+
+# import imptest.imptest_file as tt
+from imptest import imptest_file as tt
+print(tt)
+
+from imptest import imptest_file2 as b2, imptest2 as mod
+print("imptest_file2=",b2,"imptest2=",mod)
+from imptest.imptest2 import imptest_subfile
+print("imptest_subfile=",imptest_subfile)
 """)
 
 debugprint("AST Dump:",ast.dump(testing))
