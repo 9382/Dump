@@ -87,8 +87,7 @@ ExtSlice			Not implemented		Removed after py3.8 (or at least changed). No idea w
 Currently, the main thing actually missing is async / yield support, which has absolutely no implementation right now. That'll likely need a *lot* of looking into it, and that isn't gonna be fun
 """
 def CreateExecutionLoop(code):
-	builtins = __builtins__.__dict__
-	builtins["__name__"] = __name__
+	import builtins
 	class VariableScope:
 		def __init__(self, Parent, scopeType):
 			self.Parent = Parent
@@ -110,8 +109,8 @@ def CreateExecutionLoop(code):
 			else:
 				if self.Parent:
 					return self.Parent.getVar(var)
-				elif var in builtins:
-					return builtins[var]
+				elif hasattr(builtins,var):
+                    return getattr(builtins,var)
 				else:
 					raise NameError(f"name '{var}' is not defined")
 		def setVarRaw(self, var, value): #Bypass scope-based checks
