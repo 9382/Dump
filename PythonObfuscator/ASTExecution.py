@@ -38,8 +38,8 @@ Assert				Implemented
 Import				Not implemented
 ImportFrom			Not implemented
 
-Global				Not implemented		VariableScope needs sorting among other things
-Nonlocal			Not implemented		ditto
+Global				Implemented			Tested but still not confident it's perfect
+Nonlocal			Implemented			ditto
 Expr				Implemented
 Pass				Implemented
 Break				Implemented			Mostly untested
@@ -95,13 +95,14 @@ def CreateExecutionLoop(code):
 			self.Parent = Parent
 			self.Variables = {}
 			self.scopeType = scopeType
-			self.References = {}
-			self.Assignments = {}
-			self.Globals = {}
+			self.References = set()
+			self.Assignments = set()
+			self.Globals = set()
+			self.NonLocals = set()
 		def getVar(self, var):
 			debugprint("Asked to retrieve variable",var)
 			# debugprint(self,self.Variables)
-			self.References[var] = True
+			self.References.add(var)
 			if var in self.Variables:
 				return self.Variables[var]
 			else:
@@ -111,66 +112,66 @@ def CreateExecutionLoop(code):
 					return builtins[var]
 				else:
 					raise NameError(f"name '{var}' is not defined")
-		def setVar(self, var, value):
-			debugprint("Asked to set variable",var)
-			if self.scopeType == "asclause":
-				return self.Parent.setVar(var, value)
-			if var in self.References and var not in self.Assignments:
-				raise UnboundLocalError(f"local variable '{var}' referenced before assignment")
-			self.Variables[var] = value
-			self.Assignments[var] = True
 		def setVarRaw(self, var, value): #Bypass scope-based checks
 			debugprint("Asked to raw set variable",var)
 			if var in self.References and var not in self.Assignments:
 				raise UnboundLocalError(f"local variable '{var}' referenced before assignment")
+			if var in self.Globals:
+				self.Parent.setVarRaw(var, value) #A global call will always reach the top level, so the fact we use raw doesnt matter
 			self.Variables[var] = value
-			self.Assignments[var] = True
+			self.Assignments.add(var)
+		def setVar(self, var, value):
+			debugprint("Asked to set variable",var)
+			if self.scopeType == "asclause":
+				return self.Parent.setVar(var, value)
+			self.setVarRaw(var, value)
 		def deleteVar(self, var):
 			debugprint("Asked to delete variable",var)
 			if self.scopeType == "asclause":
 				self.Parent.deleteVar(var)
 			if var in self.Variables:
 				self.Variables.pop(var)
-				self.Assignments[var] = False
-				self.References[var] = False
-				self.Globals[var] = False
+				self.Assignments.discard(var)
+				self.References.discard(var)
 			else:
-				self.Parent.deleteVar(var)
+				if var in self.NonLocals or var in self.Globals:
+					#The nonlocal and global state will persist beyond deletion, so DONT clear those
+					self.Parent.deleteVar(var)
 		def triggerGlobal(self, var):
 			if self.scopeType != "core":
 				if var in self.References:
 					raise SyntaxError(f"name '{var}' is used prior to global declaration")
 				elif var in self.Assignments:
 					raise SyntaxError(f"name '{var}' is assigned to before global declaration")
-				raise ExecutorException("[!] Asked to trigger global, but this isnt implemented!")
-				# if scope.Parent:
-				# 	scope.Parent.triggerGlobal(var)
+				self.Globals.add(var)
+				self.Parent.triggerGlobal(var)
 		def triggerNonlocal(self, var):
-			raise ExecutorException("[!] Asked to trigger nonlocal, but this isnt implemented!")
+			if self.scopeType == "core":
+				raise SyntaxError("nonlocal declaration not allowed at module level")
+			if self.Parent.scopeType == "core" or var not in self.Parent.Variables:
+				raise SyntaxError(f"no binding for nonlocal '{var}' found")
+			self.NonLocals.add(var)
 		def clean(self):
-			self.Variables = {}
-			self.References = {}
-			self.Assignments = {}
-			self.Globals = {}
+			self.Variables = set()
+			self.References = set()
+			self.Assignments = set()
+			self.Globals = set()
 
 	class ClassScope(VariableScope):
 		def __init__(self, Parent, Class):
-			self.Parent = Parent
-			self.Variables = {}
-			self.scopeType = "class"
+			super().__init__(Parent, "class")
 			self.Class = Class
 		def getVar(self, var):
 			return self.Parent.getVar(var) #We don't offer variables, since we dont store them like that
 		def setVar(self, var, value):
-			self.Variables[var] = value
-			setattr(self.Class, var, value)
+			if var in self.Globals or var in self.NonLocals:
+				self.Parent.setVar(var, value) #It doesn't become a member of the class if a nonlocal/global call is given
+			else:
+				self.Variables[var] = value
+				setattr(self.Class, var, value)
 		def deleteVar(self, var):
 			self.Variables.pop(var)
 			delattr(self.Class, var)
-		def triggerGlobal(self, var):
-			raise ExecutorException("What?")
-		def triggerNonlocal(self, var):
-			raise ExecutorException("What?")
 		def clean(self):
 			for var in self.Variables:
 				delattr(self.Class, var)
@@ -864,7 +865,9 @@ def CreateExecutionLoop(code):
 	return __main__
 
 
-testing = ast.parse("""print("Hey!")
+testing = ast.parse("""
+## Testing HandleArgAssignment (the call arg handler)
+print("Hey!")
 print(False)
 print("What?", end="ASD\\n")
 print((lambda x,y : y/x)(5,6))
@@ -873,20 +876,17 @@ print(x**2)
 def f(arg, arg2):
 	print(arg2, arg)
 	return arg2*arg, arg/arg2
-
 def f2(x, y, z=None, *, a, b, c=None, **k):
 	print(x,y,z,"split",a,b,c,"split",k)
-
 f2(1, 2, z=True, a=5, b=6, p=8, c=7)
-
 print("out=", f(2, 3))
 
+## Testing class objects
 class Test:
 	def __init__(self, v):
 		self.y = v
 	def gety(self):
 		return self.y
-
 print("Test=",Test)
 TestObj = Test(8)
 print("TestObj=",TestObj)
@@ -894,11 +894,13 @@ print("TO.gety()=",TestObj.gety())
 TestObj.y += 15
 print("TO.gety()=",TestObj.gety())
 
+## Testing unpacking into dictionaries
 x = {"A":5, 6:True}
 y = {**x, 8:True}
 z = {**y, **x, "A":1}
 print(x,y,z)
 
+## Testing complex generators
 x = ["A", "DD", "B", "CCBC"]
 
 print("ListComp")
@@ -919,6 +921,7 @@ print(type(gen), gen)
 for v in gen:
 	print("Gen object entry",v)
 
+## Testing decorators
 def d1(obj):
 	print("Hooking obj in D1...")
 	def ret():
@@ -939,7 +942,6 @@ def test():
 	print("This is test")
 	return True
 print("out=",test())
-
 print("Test part 2")
 @d1
 @d2
@@ -947,14 +949,14 @@ class test2:
 	print("Executing body of test")
 print("Running test")
 print("out=",test2())
-
 print("Decorators test done")
 
-
+## Testing IfExpressions
 print("IfExp1", 1 if True else 2 if True else 3 if True else 4)
 print("IfExp2", 1 if True else 2 if False else 3 if True else 4)
 print("IfExp3", (1 if True else 2) if False else (3 if True else 4))
 
+## Testing a with clause (makes file so leaving commented)
 # try:
 # 	with open("with.txt","w") as f:
 # 		print("Closed?",f.closed)
@@ -965,6 +967,7 @@ print("IfExp3", (1 if True else 2) if False else (3 if True else 4))
 # 	print("Ignoring intentional fail")
 # print("Closed?",f.closed)
 
+## Testing starred expressions in function calls
 x = [2,3,4]
 y = {2:3, 4:5}
 y2 = {"end":"A\\n"}
@@ -976,6 +979,7 @@ print(1, 2, y2)
 print(1, 2, *y2)
 print(1, 2, **y2)
 
+## Testing starred expressions in assignments
 (n,*y,n) = 1,2,3
 print(n,y)
 a,*y,b,c = 1,2,3,4,5
@@ -983,6 +987,7 @@ print(a,y,b,c)
 a,b,*y,c = 1,2,3,4,5
 print(a,b,y,c)
 
+## Testing JoinedStr and FormattedValue
 x = [5, True]
 y = [*x, 8]
 z = [*y, *x, "A", 1]
@@ -990,6 +995,32 @@ print("x", x, "y", y, "z", z)
 print(f"A{x*3}B{y}C{z*2}")
 b = 5.4321
 print(f"{b:2.3}")
+
+## Testing global and nonlocal
+x = 1
+def y():
+	global u
+	x = 2
+	class u:
+		global w
+		def w(self):
+			print("w",self)
+			x(2)
+			u.o(3)
+		nonlocal x
+		def x(self):
+			print("x",self)
+		def o(self):
+			print("o",self)
+
+y()
+print("u=",u)
+print("x=",x)
+print("w=",w)
+print("u.w exists?",hasattr(u,"w"))
+print("u.x exists?",hasattr(u,"x"))
+print("u.o exists?",hasattr(u,"o"))
+w(1)
 """)
 
 debugprint("AST Dump:",ast.dump(testing))
