@@ -36,7 +36,7 @@ Try					Implemented			Mostly untested
 Assert				Implemented
 
 Import				Implemented
-ImportFrom			Implemented			Very poor behaviour when importing * with a module with no defined __all__
+ImportFrom			Implemented
 
 Global				Implemented			Tested but still not confident it's perfect
 Nonlocal			Implemented			ditto
@@ -629,12 +629,8 @@ def CreateExecutionLoop(code):
 					out = __import__(module, globals(), locals(), [], statement.level)
 					for term in module.split(".")[1:]:
 						out = out.__dict__[term]
-					if "__all__" in out.__dict__:
-						for term in out.__dict__["__all__"]:
-							scope.setVar(term, out.__dict__[term])
-					else:
-						for key, value in out.__dict__: #This exposes too much data
-							scope.setVar(term, out.__dict__[term])
+					for term in dir(out):
+						scope.setVar(term, out.__dict__[term])
 				else:
 					out = __import__(module, globals(), locals(), [target], statement.level)
 					out = out.__dict__[target]
@@ -1052,7 +1048,7 @@ print("imptest_subfile=",imptest_subfile)
 x = {1:2, 3:4}
 for y in x:
 	print("fy",y)
-for y,z in x.items():
+for y,*z in x.items():
 	print("fyz",y,z)
 """)
 
