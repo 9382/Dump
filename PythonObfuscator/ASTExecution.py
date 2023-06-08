@@ -158,11 +158,6 @@ def CreateExecutionLoop(code):
 			if self.Parent.scopeType == "core" or var not in self.Parent.Variables:
 				raise SyntaxError(f"no binding for nonlocal '{var}' found")
 			self.NonLocals.add(var)
-		def clean(self):
-			self.Variables = set()
-			self.References = set()
-			self.Assignments = set()
-			self.Globals = set()
 
 	class ClassScope(VariableScope):
 		def __init__(self, Parent, Class):
@@ -179,10 +174,6 @@ def CreateExecutionLoop(code):
 		def deleteVar(self, var):
 			self.Variables.pop(var)
 			delattr(self.Class, var)
-		def clean(self):
-			for var in self.Variables:
-				delattr(self.Class, var)
-			self.Variables = {}
 
 	class ReturnStatement:
 		def __init__(self, Type, Data=None):
@@ -550,7 +541,7 @@ def CreateExecutionLoop(code):
 						break
 					elif out.Type == "Continue":
 						continue
-					elif out.Type == "Return":
+					else:
 						return out
 			else:
 				return ExecuteStatList(statement.orelse, scope)
@@ -565,7 +556,7 @@ def CreateExecutionLoop(code):
 						break
 					elif out.Type == "Continue":
 						continue
-					elif out.Type == "Return":
+					else:
 						return out
 			else:
 				return ExecuteStatList(statement.orelse, scope)
@@ -888,11 +879,11 @@ def CreateExecutionLoop(code):
 	return __main__
 
 
-testing = ast.parse("""
+testing = ast.parse(r"""
 ## Testing HandleArgAssignment (the call arg handler)
 print("Hey!")
 print(False)
-print("What?", end="ASD\\n")
+print("What?", end="ASD\n")
 print((lambda x,y : y/x)(5,6))
 x,y,z = 5,6,7
 print(x**2)
