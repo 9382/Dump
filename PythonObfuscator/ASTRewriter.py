@@ -497,6 +497,7 @@ def CreateExecutionLoop(code):
 					func, hadChange = info
 				else:
 					func = info
+					hadChange = False
 			else:
 				func = f"({ExecuteExpression(expr.func, scope)})"
 			arguments = []
