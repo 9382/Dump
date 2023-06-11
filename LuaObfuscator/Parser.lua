@@ -239,7 +239,7 @@ function LexLua(src)
 					toEmit = {Type = 'Ident', Data = dat}
 				end
 
-			elseif Digits[c] or (peek() == '.' and Digits[peek(1)]) then 
+			elseif Digits[c] or (peek() == '.' and Digits[peek(1)]) then
 				--number const
 				local start = p
 				if c == '0' and peek(1) == 'x' then
@@ -277,11 +277,11 @@ function LexLua(src)
 						else
 							if next == "x" then
 								local n1 = get()
-								if n1 == "" or n1 == delim or not Digits[n1] then
+								if n1 == "" or n1 == delim or not HexDigits[n1] then
 									generateError("invalid escape sequence near '"..delim.."'")
 								end
 								local n2 = get()
-								if n2 == "" or n2 == delim or not Digits[n2] then
+								if n2 == "" or n2 == delim or not HexDigits[n2] then
 									generateError("invalid escape sequence near '"..delim.."'")
 								end
 								content = content .. string.char(tonumber(n1 .. n2, 16))
