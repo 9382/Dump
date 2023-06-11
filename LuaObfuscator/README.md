@@ -26,4 +26,4 @@ A minified version of the executor, specifically used for the idea of obfuscatio
 
 ### Executor return theory.txt
 
-Not important to the code at all, but it is a nice insight into my through process about how to handle the Return statement through all the conditions there are. Created after multiple just-code-and-hope attempts to make the system failed to the point were I decided I needed to actually sit down and plan ahead or it wasn't getting made (yeah, thats right, nearly none of this was planned. God knows how it works).
+Not important to the code at all, but it is a nice insight into my through process about how to handle the Return statement through all the conditions there are. Created because so many just-code-and-hope attempts to make the system failed and I decided I needed to actually sit down and plan ahead or it wasn't getting made (yeah, thats right, nearly none of this was planned. God knows how it works).
