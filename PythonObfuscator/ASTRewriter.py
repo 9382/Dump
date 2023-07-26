@@ -15,8 +15,10 @@ OPTION_indent_char = "\t"
 # Attempts to ""obfuscate"" numbers by abstracting them. Slightly messy looking
 OPTION_obscure_numbers = False
 
-# Attempts to re-name variables with complex alternatives. Tries to avoid changing anything that could be a concern, but it isn't perfect. Also INCREDIBLY messy
 OPTION_obscure_variables = False
+# Attempts to re-name variables with random text. Tries to avoid changing anything that could be a concern, but it isn't perfect. Also INCREDIBLY messy
+# Failures can be expected when using nonlocals/globals inside classes or using nonlocals weirdly
+# Does not currently respect __all__ exports, and will rename them
 
 # Same as obscure_variables, but instead uses as few characters as it can. Same limitations/issues apply (UNIMPLEMENTED)
 OPTION_minimise_variables = False
@@ -118,63 +120,72 @@ The alternative would be to evaluate the entire statement list and then go back 
 
 def CreateExecutionLoop(code):
 	import builtins
-	VariableTranslations = {}
-	#This was part of the class, bug there's bugs with importing
 	class VariableScope:
 		def __init__(self, Parent, scopeType):
 			self.Parent = Parent
 			self.scopeType = scopeType
 			self.Globals = set()
 			self.NonLocals = set()
-		def getVar(self, var):
-			debugprint("Asked to retrieve variable",var)
-			# debugprint(self,VariableTranslations)
-			if self.Parent:
-				return self.Parent.getVar(var)
-			elif var in VariableTranslations:
-				return VariableTranslations[var]
-			elif self.scopeType == "class":
-				return var
-			elif hasattr(builtins, var):
-				return var
+			self.VarMapping = {}
+		def getVar(self, var, internal=False):
+			out = self._getVar(var)
+			if not internal and type(out) == tuple:
+				return out[0]
 			else:
-				return self.createVar(var)
+				return out
+		def _getVar(self, var):
+			debugprint("Asked to retrieve variable",var)
+			# The order of this is very messy, changes a lot, and is mostly guess work
+			# But, uh, this makes sense, right?
+			if self.scopeType == "class":
+				return var, True
+			if self.Parent:
+				#damn import *
+				newVar, exists = self.Parent.getVar(var, True)
+				if exists:
+					return newVar, True
+			if var in self.VarMapping:
+				return self.VarMapping[var], True
+			elif hasattr(builtins, var):
+				return var, True
+			else:
+				return var, False
 		def createVar(self, var):
 			if not OPTION_obscure_variables:
 				return str(var)
 			else:
-				if var in VariableTranslations:
-					return VariableTranslations[var]
+				if var in self.VarMapping:
+					return self.VarMapping[var]
 				elif hasattr(builtins, var):
-					VariableTranslations[var] = var
+					self.VarMapping[var] = var
 					return var
 				else:
 					if self.scopeType == "class":
 						newName = var
 					else:
 						newName = GenerateRandomStr()
-					VariableTranslations[var] = newName
+					self.VarMapping[var] = newName
 					return newName
 		def deleteVar(self, var):
 			debugprint("Asked to delete variable",var)
 			if self.scopeType == "asclause":
 				self.Parent.deleteVar(var)
-			if var in VariableTranslations:
-				VariableTranslations.pop(var)
+			if var in self.VarMapping:
+				self.VarMapping.pop(var)
 			else:
 				if var in self.NonLocals or var in self.Globals:
 					#The nonlocal and global state will persist beyond deletion, so DONT clear those
 					self.Parent.deleteVar(var)
 		def triggerGlobal(self, var):
-			VariableTranslations[var] = var #Dont obscure globals
+			self.VarMapping[var] = var #Dont obscure globals
 			if self.scopeType != "core":
 				self.Globals.add(var)
 				self.Parent.triggerGlobal(var)
 		def triggerNonlocal(self, var):
 			if self.scopeType == "core":
 				raise SyntaxError("nonlocal declaration not allowed at module level")
+			self.VarMapping[var] = var #Dont obscure nonlocals. Not required, just safer
 			self.NonLocals.add(var)
-			self.createVar(var)
 
 	class ReturnStatement:
 		def __init__(self, Type, Data=None):
@@ -334,7 +345,11 @@ def CreateExecutionLoop(code):
 		if exprType == ast.Constant:
 			if type(expr.value) == str:
 				if ShouldWrap:
-					return WrapInQuotes(expr.value).replace("\n","\\n")
+					out = WrapInQuotes(expr.value).replace("\n","\\n")
+					if OPTION_insert_junk:
+						return out + "[::]"
+					else:
+						return out
 				else:
 					expr.value.replace("\n","\\n")
 			elif type(expr.value) == int or type(expr.value) == float:
@@ -342,11 +357,12 @@ def CreateExecutionLoop(code):
 			return str(expr.value)
 
 		elif exprType == ast.Name:
+			scopemethod = (type(expr.ctx) == ast.Store) and scope.createVar or scope.getVar
 			if GiveDetailedInfo:
-				out = scope.getVar(expr.id)
+				out = scopemethod(expr.id)
 				return out, out != expr.id
 			else:
-				return scope.getVar(expr.id)
+				return scopemethod(expr.id)
 
 		elif exprType == ast.NamedExpr:
 			target, value = ExecuteExpression(expr.target, scope), ExecuteExpression(expr.value, scope)
@@ -398,9 +414,9 @@ def CreateExecutionLoop(code):
 
 		elif exprType == ast.alias:
 			if expr.asname:
-				return f"{expr.name} as {scope.getVar(expr.asname)}"
+				return f"{expr.name} as {scope.createVar(expr.asname)}"
 			else:
-				if OPTION_obscure_variables:
+				if OPTION_obscure_variables and expr.name != "*":
 					return f"{expr.name} as {scope.createVar(expr.name)}"
 				else:
 					return f"{expr.name}"
@@ -512,11 +528,6 @@ def CreateExecutionLoop(code):
 			return f"await {ExecuteExpression(expr.value, scope)}"
 
 		elif exprType == ast.Lambda:
-			# def LambdaHandler(args, kwargs):
-			# 	subScope = VariableScope(scope, "lambda")
-			# 	HandleArgAssignment(subScope, expr, args, kwargs)
-			# 	return ExecuteExpression(expr.body, subScope)
-			# return lambda *args, **kwargs : LambdaHandler(args, kwargs)
 			subScope = VariableScope(scope, "lambda")
 			args = HandleArgs(subScope, expr.args)
 			body = ExecuteExpression(expr.body, subScope)
@@ -684,7 +695,7 @@ def CreateExecutionLoop(code):
 			if statement.type:
 				typeText = ExecuteExpression(statement.type, scope)
 				if statement.name:
-					out.append(f"except {typeText} as {scope.getVar(statement.name)}:")
+					out.append(f"except {typeText} as {scope.createVar(statement.name)}:")
 				else:
 					out.append(f"except {typeText}:")
 			else:
@@ -705,7 +716,7 @@ def CreateExecutionLoop(code):
 			if scope.scopeType == "class":
 				name = statement.name
 			else:
-				name = scope.getVar(statement.name)
+				name = scope.createVar(statement.name)
 			args = HandleArgs(subScope, statement.args)
 			body = ExecuteStatList(statement.body, subScope)
 			out.extend(decorators)
@@ -720,7 +731,7 @@ def CreateExecutionLoop(code):
 			subScope = VariableScope(scope, "class")
 			out = []
 			decorators = ImplementObjectDecorators(statement.decorator_list, scope)
-			name = scope.getVar(statement.name)
+			name = scope.createVar(statement.name)
 			args = []
 			for base in statement.bases:
 				args.append(ExecuteExpression(base, scope))
@@ -742,7 +753,7 @@ def CreateExecutionLoop(code):
 		compiledText = []
 		for statement in statList:
 			if OPTION_insert_junk and random.randint(1,4) == 1:
-				out = ExecuteRandomJunk(scope)
+				out = ExecuteStatement(GenerateRandomJunk(), scope)
 				if type(out) == list:
 					compiledText.extend(out)
 				elif type(out) == str:
@@ -799,10 +810,6 @@ def CreateExecutionLoop(code):
 		return ", ".join(argString)
 
 	def ImplementObjectDecorators(decorators, scope):
-		# decorators = []
-		# for i in range(len(decorators)-1, -1, -1): #Traverse in reverse order
-		# 	decorator = ExecuteExpression(decorators[i], scope)
-		# 	obj = decorator(obj)
 		out = []
 		for decorator in decorators:
 			out.append(f"@{ExecuteExpression(decorator, scope)}")
@@ -823,17 +830,16 @@ def CreateExecutionLoop(code):
 		return " ".join(terms)
 
 	JunkLines = [
-		["while '__RANDOM__':",f"{OPTION_indent_char}break"],
-		"pass",
-		"if '__RANDOM__': pass",
-		["if (__RANDOM__ := __ZERO__):", f"{OPTION_indent_char}__RANDOM__()"],
+		lambda: ast.While(test=ast.Constant(value=GenerateRandomStr()),body=[ast.Break()],orelse=[]),
+		lambda: ast.Pass(),
+		lambda: ast.If(test=ast.Constant(value=GenerateRandomStr()),body=[ast.Pass()],orelse=[]),
+		lambda: ast.If(
+			test=ast.NamedExpr(target=ast.Name(id=GenerateRandomStr(),ctx=ast.Store()),value=ast.Constant(value=0)),
+			body=[ast.Expr(value=ast.Call(func=ast.Name(id=GenerateRandomStr(),ctx=ast.Store()),args=[],keywords=[]))],orelse=[]
+		)
 	]
-	def ExecuteRandomJunk(scope):
-		choice = random.choice(JunkLines)
-		if type(choice) == list:
-			return [part.replace("__RANDOM__", GenerateRandomStr()).replace("__ZERO__", MangleNumber(0)) for part in choice]
-		else:
-			return choice.replace("__RANDOM__", GenerateRandomStr().replace("__ZERO__", MangleNumber(0)))
+	def GenerateRandomJunk():
+		return random.choice(JunkLines)()
 
 	def __main__():
 		scope = VariableScope(None, "core")
