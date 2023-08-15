@@ -481,12 +481,12 @@ local function CreateExecutionLoop(ast)
 				return result
 			end
 
-			local Buffer = x
+			local BufferPoint = 1
 			local BitData = ""
 			local function BufferSanityCheck(len)
 				for i = 1, mathfloor((len-#BitData-1)/6)+1 do
-					BitData = BitData .. stringsub(ToBit(stringbyte(Buffer,1,1),8),3,-1)
-					Buffer = stringsub(Buffer,2,-1)
+					BitData = BitData .. stringsub(ToBit(stringbyte(x,BufferPoint,BufferPoint),8),3,-1)
+					BufferPoint = BufferPoint + 1
 				end
 			end
 			local function ReadRaw(len)
