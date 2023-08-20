@@ -1304,9 +1304,9 @@ local RewriterOptions = {
 	-- Turns normal expressions into complex ones
 	-- ObscureGlobals will only obscure globals normally found in _G (E.g. print or table)
 	-- It will not effect script-made globals for the sake of getfenv()
-	ObscureNumbers = false,
-	ObscureStrings = false,
-	ObscureGlobals = false,
+	ObscureNumbers = false, --NOT YET IMPLEMENTED
+	ObscureStrings = false, --NOT YET IMPLEMENTED
+	ObscureGlobals = false, --NOT YET IMPLEMENTED
 
 	--== UseShortCallExprs ==--
 	-- This turns statements like print("Test") into print"Test"
@@ -1314,7 +1314,7 @@ local RewriterOptions = {
 
 	--== AddJunkCode ==--
 	-- This adds code that serves no purpose functionally
-	AddJunkCode = false,
+	AddJunkCode = false, --NOT YET IMPLEMENTED
 }
 
 -- RewriterOptions helper functions
@@ -1494,6 +1494,9 @@ local function WriteExpression(Expression, Scope)
 	-- Excess brackets on all operators because calculating BODMAS is lame and requires effort and im lazy
 	elseif Expression.AstType == "UnopExpr" then
 		-- Don't really care about spacing for a unary operator, it makes it less clear if anything
+		if Expression.Op == "not" then -- Unless its a bloody not statement
+			return "(" .. Expression.Op .. " " .. WriteExpression(Expression.Rhs, Scope) .. ")"
+		end
 		return "(" .. Expression.Op .. WriteExpression(Expression.Rhs, Scope) .. ")"
 
 	elseif Expression.AstType == "BinopExpr" then
@@ -1625,7 +1628,11 @@ local function WriteStatement(Statement, Scope)
 		for i,Value in ipairs(Statement.InitList) do
 			NewValues[i] = WriteExpression(Value, Scope)
 		end
-		return "local " .. table.concat(NewLocals, CommaSplitter) .. EqualsSplitter .. table.concat(NewValues, CommaSplitter) .. ConsiderSemicolon()
+		if #NewValues > 0 then
+			return "local " .. table.concat(NewLocals, CommaSplitter) .. EqualsSplitter .. table.concat(NewValues, CommaSplitter) .. ConsiderSemicolon()
+		else
+			return "local " .. table.concat(NewLocals, CommaSplitter) .. ConsiderSemicolon()
+		end
 
 	elseif Statement.AstType == "ReturnStatement" then
 		local NewArguments = {}
