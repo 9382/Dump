@@ -1335,15 +1335,6 @@ local function ConsiderSemicolon()
 	end
 end
 
---epik debug
-local function __PrintFields(obj)
-	local fields = {}
-	for a,b in next,obj do
-		fields[#fields+1]=a
-	end
-	print("Fields for obj",obj,":",table.concat(fields,", "))
-end
-
 local function GenerateRandomString(P1, P2)
 	local ValidCharacters = "abcdefghijklmnopqrstuvwxyz_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	if P2 then --Min, Max
@@ -1401,7 +1392,6 @@ end
 local WriteStatList
 local function WriteExpression(Expression, Scope)
 	if Expression.AstType == "Function" then
-		print(PrintTable(Expression))
 		local SubScope = CreateExecutionScope(Scope)
 		local NewArguments = {}
 		for i,Argument in ipairs(Expression.Arguments) do
@@ -1512,7 +1502,6 @@ The helper function ConsiderSemicolon() is available for that purpose
 --]]
 local function WriteStatement(Statement, Scope)
 	if Statement.AstType == "Function" then
-		print(PrintTable(Statement))
 		local start
 		if Statement.IsLocal then
 			start = "local function " .. Scope:MakeLocal(Statement.Name.Name)
@@ -1662,9 +1651,7 @@ local function WriteStatement(Statement, Scope)
 		return WriteExpression(Statement.Expression, Scope) .. ConsiderSemicolon()
 
 	end
-
-	print("We didn't return on a statement!?",Statement,Statement.AstType)
-	__PrintFields(Statement)
+	error("We didn't return on a statement!? " .. tostring(Statement))
 end
 
 local function StringSplit(str, splitter)
@@ -1708,7 +1695,7 @@ WriteStatList = function(StatList, Scope, DontIndent)
 	return out
 end
 
-print((function(C)
+return function(C)
 	local s,p = ParseLua(C)
 	if not s then
 		print("Failed to parse the lua - "..p)
@@ -1721,95 +1708,4 @@ print((function(C)
 
 	local result = WriteStatList(p, CreateExecutionScope(), true)
 	return true, table.concat(result,"\n")
-end)([==[
-local test = 5
-local a,b,c = 3
-local d,e = 4,5,6
-global = 6
-a, b = 1
-c = 2, 3
-print(test, global, global-test)
-
-local t = {1, "b", ["A"]=b, true, nil, g=false}
-print(t[1], t["A"], t.g)
-
-function t:x(a)
-	print(a)
-	return a
-end
-
-t:x(5)
-
-print("")
-print({})
-print""
-print{}
-
-local function F1(a, b, c, ...)
-	print(c, b, a, ...)
-	return ...
-end
-
-do
-	function F2(a, b, c, ...)
-		print(c, b, a, ...)
-		return ...
-	end
-end
-
-local F3 = function(a, b, c, ...)
-	print(c, b, a, ...)
-	return ...
-end
-
-local t = {}
-function t.F4(self, a, b, c, ...)
-	print("self=",self)
-	print(c, b, a, ...)
-	return ...
-end
-
-function t:F5(a, b, c, ...)
-	print("self=",self)
-	print(c, b, a, ...)
-	return ...
-end
-
-repeat
-	print("5")
-until math.random(1,2) == 2
-
-local t = {1,2,"G",b=5}
-for a,b in pairs(t),t,nil do
-	print(a,b)
-end
-
-for i = 1,#t do
-	print(t,t[i])
-end
-for i = #t,1,-1 do
-	print(t,t[i])
-end
-
-if t == 5 then
-	print(true)
-elseif t == 6 then
-	print(false)
-else
-	print("L")
-end
-
-while t == 7 do
-	crash()
-end
-]==]))
-
-return function(C)
-	local s,p = ParseLua(C)
-	if not s then
-		print("Failed to parse the lua - "..p)
-		return false,p
-	end
-
-	return true, RewriteAST(p)
 end
