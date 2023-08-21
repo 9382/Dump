@@ -1395,6 +1395,9 @@ local function WriteExpression(Expression, Scope)
 
 	elseif Expression.AstType == "CallExpr" then
 		local Base = WriteExpression(Expression.Base, Scope)
+		if Expression.Base.AstType == "Function" then --Special case for anonymous function calling
+			Base = "(" .. Base .. ")"
+		end
 		if RewriterOptions.UseShortCallExprs and #Expression.Arguments == 1 then
 			local Arg1 = Expression.Arguments[1]
 			if Arg1.AstType == "StringExpr" or Arg1.AstType == "ConstructorExpr" then
