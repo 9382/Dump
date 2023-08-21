@@ -82,11 +82,6 @@ local Keywords = lookupify{
 		'return', 'then', 'true', 'until', 'while',
 };
 
-local BackslashEscaping = {
-	a="\a", b="\b", f="\f", n="\n", r="\r", t="\t", v="\v",
-	["\\"]="\\", ['"']='"', ["'"]="'", ["["]="[", ["]"]="]"
-}
-
 local function LexLua(src)
 	--token dump
 	local tokens = {}
@@ -265,45 +260,20 @@ local function LexLua(src)
 				local start = p
 				--string const
 				local delim = get()
-				local content = ""
 				local contentStart = p
 				while true do
 					local c = get()
 					if c == '\\' then
-						local next = get()
-						local replacement = BackslashEscaping[next]
-						if replacement then
-							content = content .. replacement
-						else
-							if next == "x" then
-								local n1 = get()
-								if n1 == "" or n1 == delim or not HexDigits[n1] then
-									generateError("invalid escape sequence near '"..delim.."'")
-								end
-								local n2 = get()
-								if n2 == "" or n2 == delim or not HexDigits[n2] then
-									generateError("invalid escape sequence near '"..delim.."'")
-								end
-								content = content .. string.char(tonumber(n1 .. n2, 16))
-							elseif Digits[next] then
-								local num = next
-								while #num < 3 and Digits[peek()] do
-									num = num .. get()
-								end
-								content = content .. string.char(tonumber(num))
-							else
-								generateError("invalid escape sequence near '"..delim.."'")
-							end
-						end
+						get() --get the escape char
 					elseif c == delim then
 						break
 					elseif c == '' then
 						generateError("Unfinished string near <eof>")
-					else
-						content = content .. c
 					end
 				end
-				toEmit = {Type = 'String', Data = delim .. content .. delim, Constant = content}
+				local content = src:sub(contentStart, p-2)
+				local constant = src:sub(start, p-1)
+				toEmit = {Type = 'String', Data = constant, Constant = content}
 
 			elseif c == '[' then
 				local content, wholetext = tryGetLongString()
