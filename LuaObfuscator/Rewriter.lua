@@ -1412,22 +1412,28 @@ local function WriteExpression(Expression, Scope)
 
 	elseif Expression.AstType == "StringCallExpr" then
 		local Base = WriteExpression(Expression.Base, Scope)
-		if RewriterOptions.UseShortCallExprs then
-			return Base .. Expression.Arguments[1].Data
-		else
-			return Base .. "(" .. Expression.Arguments[1].Data .. ")"
+		if Expression.Base.AstType == "Function" then --Special case for anonymous function calling
+			Base = "(" .. Base .. ")"
 		end
+		local Argument = WriteExpression(Expression.Arguments[1], Scope)
+		if not RewriterOptions.UseShortCallExprs then
+			Argument = "(" .. Argument .. ")"
+		end
+		return Base .. Argument
 
 	elseif Expression.AstType == "TableCallExpr" then
 		local Base = WriteExpression(Expression.Base, Scope)
-		if RewriterOptions.UseShortCallExprs then
-			return Base .. WriteExpression(Expression.Arguments[1], Scope)
-		else
-			return Base .. "(" .. WriteExpression(Expression.Arguments[1], Scope) .. ")"
+		if Expression.Base.AstType == "Function" then --Special case for anonymous function calling
+			Base = "(" .. Base .. ")"
 		end
+		local Argument = WriteExpression(Expression.Arguments[1], Scope)
+		if not RewriterOptions.UseShortCallExprs then
+			Argument = "(" .. Argument .. ")"
+		end
+		return Base .. Argument
 
 	elseif Expression.AstType == "NumberExpr" then
-		return tostring(Expression.Value.Data)
+		return Expression.Value.Data
 
 	elseif Expression.AstType == "StringExpr" then
 		return Expression.Value.Data
@@ -1497,7 +1503,7 @@ local function WriteStatement(Statement, Scope)
 		for i = 1,#Body do
 			Lines[#Lines+1] = Body[i]
 		end
-		Lines[#Lines+1] = "end" .. ConsiderSemicolon()
+		Lines[#Lines+1] = "end"
 		return CompileWithFormattingData(Lines)
 
 	elseif Statement.AstType == "IfStatement" then
@@ -1516,7 +1522,7 @@ local function WriteStatement(Statement, Scope)
 				Lines[#Lines+1] = Body[i]
 			end
 		end
-		Lines[#Lines+1] = "end" .. ConsiderSemicolon()
+		Lines[#Lines+1] = "end"
 		return CompileWithFormattingData(Lines)
 
 	elseif Statement.AstType == "WhileStatement" then
@@ -1526,7 +1532,7 @@ local function WriteStatement(Statement, Scope)
 		for i = 1,#Body do
 			Lines[#Lines+1] = Body[i]
 		end
-		Lines[#Lines+1] = "end" .. ConsiderSemicolon()
+		Lines[#Lines+1] = "end"
 		return CompileWithFormattingData(Lines)
 
 	elseif Statement.AstType == "DoStatement" then
@@ -1536,7 +1542,7 @@ local function WriteStatement(Statement, Scope)
 		for i = 1,#Body do
 			Lines[#Lines+1] = Body[i]
 		end
-		Lines[#Lines+1] = "end" .. ConsiderSemicolon()
+		Lines[#Lines+1] = "end"
 		return CompileWithFormattingData(Lines)
 
 	elseif Statement.AstType == "NumericForStatement" then
@@ -1550,7 +1556,7 @@ local function WriteStatement(Statement, Scope)
 		for i = 1,#Body do
 			Lines[#Lines+1] = Body[i]
 		end
-		Lines[#Lines+1] = "end" .. ConsiderSemicolon()
+		Lines[#Lines+1] = "end"
 		return CompileWithFormattingData(Lines)
 
 	elseif Statement.AstType == "GenericForStatement" then
@@ -1568,7 +1574,7 @@ local function WriteStatement(Statement, Scope)
 		for i = 1,#Body do
 			Lines[#Lines+1] = Body[i]
 		end
-		Lines[#Lines+1] = "end" .. ConsiderSemicolon()
+		Lines[#Lines+1] = "end"
 		return CompileWithFormattingData(Lines)
 
 	elseif Statement.AstType == "RepeatStatement" then
@@ -1578,7 +1584,7 @@ local function WriteStatement(Statement, Scope)
 		for i = 1,#Body do
 			Lines[#Lines+1] = Body[i]
 		end
-		Lines[#Lines+1] = "until " .. WriteExpression(Statement.Condition, Scope) .. ConsiderSemicolon()
+		Lines[#Lines+1] = "until " .. WriteExpression(Statement.Condition, Scope)
 		return CompileWithFormattingData(Lines)
 
 	elseif Statement.AstType == "LocalStatement" then
@@ -1591,9 +1597,9 @@ local function WriteStatement(Statement, Scope)
 			NewValues[i] = WriteExpression(Value, Scope)
 		end
 		if #NewValues > 0 then
-			return "local " .. table.concat(NewLocals, CommaSplitter) .. EqualsSplitter .. table.concat(NewValues, CommaSplitter) .. ConsiderSemicolon()
+			return "local " .. table.concat(NewLocals, CommaSplitter) .. EqualsSplitter .. table.concat(NewValues, CommaSplitter)
 		else
-			return "local " .. table.concat(NewLocals, CommaSplitter) .. ConsiderSemicolon()
+			return "local " .. table.concat(NewLocals, CommaSplitter)
 		end
 
 	elseif Statement.AstType == "ReturnStatement" then
@@ -1601,13 +1607,13 @@ local function WriteStatement(Statement, Scope)
 		for i,Argument in ipairs(Statement.Arguments) do
 			NewArguments[i] = WriteExpression(Argument, Scope)
 		end
-		return "return " .. table.concat(NewArguments, CommaSplitter) .. ConsiderSemicolon()
+		return "return " .. table.concat(NewArguments, CommaSplitter)
 
 	elseif Statement.AstType == "BreakStatement" then
-		return "break" .. ConsiderSemicolon()
+		return "break"
 
 	elseif Statement.AstType == "ContinueStatement" then
-		return "continue" .. ConsiderSemicolon()
+		return "continue"
 
 	elseif Statement.AstType == "AssignmentStatement" then
 		local NewLhs = {}
@@ -1618,10 +1624,10 @@ local function WriteStatement(Statement, Scope)
 		for i,Value in ipairs(Statement.Rhs) do
 			NewRhs[i] = WriteExpression(Value, Scope)
 		end
-		return table.concat(NewLhs, CommaSplitter) .. EqualsSplitter .. table.concat(NewRhs, CommaSplitter) .. ConsiderSemicolon()
+		return table.concat(NewLhs, CommaSplitter) .. EqualsSplitter .. table.concat(NewRhs, CommaSplitter)
 
 	elseif Statement.AstType == "CallStatement" then
-		return WriteExpression(Statement.Expression, Scope) .. ConsiderSemicolon()
+		return WriteExpression(Statement.Expression, Scope)
 
 	end
 	error("We didn't return on a statement!? " .. tostring(Statement))
@@ -1650,12 +1656,12 @@ WriteStatList = function(StatList, Scope, DontIndent)
 	local out = {}
 	for _,Statement in ipairs(StatList.Body) do
 		if RewriterOptions.AddJunkCode and math.random(1,4) == 1 then
-			local JunkText = StringSplit(WriteStatement(GenerateJunkCode(), Scope), "\n")
+			local JunkText = StringSplit(WriteStatement(GenerateJunkCode(), Scope) .. ConsiderSemicolon(), "\n")
 			for i = 1,#JunkText do
 				out[#out+1] = JunkText[i]
 			end
 		end
-		local StatementText = StringSplit(WriteStatement(Statement, Scope), "\n")
+		local StatementText = StringSplit(WriteStatement(Statement, Scope) .. ConsiderSemicolon(), "\n")
 		for i = 1,#StatementText do
 			out[#out+1] = StatementText[i]
 		end
