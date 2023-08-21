@@ -1475,10 +1475,6 @@ local function WriteExpression(Expression, Scope)
 	error("We didn't return on a expression!? " .. tostring(Expression))
 end
 
---[[
-Statements are responsible for managing their semicolons themselves
-The helper function ConsiderSemicolon() is available for that purpose
---]]
 local function WriteStatement(Statement, Scope)
 	if Statement.AstType == "Function" then
 		local start
@@ -1551,7 +1547,7 @@ local function WriteStatement(Statement, Scope)
 		local Start = WriteExpression(Statement.Start, Scope)
 		local End = WriteExpression(Statement.End, Scope)
 		local Elements = {Start, End, Statement.Step and WriteExpression(Statement.Step, Scope)}
-		local Lines = {"for " .. Variable .. " = " .. table.concat(Elements, CommaSplitter) .. " do"}
+		local Lines = {"for " .. Variable .. EqualsSplitter .. table.concat(Elements, CommaSplitter) .. " do"}
 		local Body = WriteStatList(Statement.Body, SubScope)
 		for i = 1,#Body do
 			Lines[#Lines+1] = Body[i]
