@@ -1274,7 +1274,7 @@ local RewriterOptions = {
 	-- Turns normal expressions into complex ones
 	-- ObscureGlobals will only obscure globals normally found in _G (E.g. print or table)
 	-- It will not effect script-made globals for the sake of getfenv()
-	ObscureNumbers = false, --NOT YET IMPLEMENTED
+	ObscureNumbers = false, --SOMEWHAT IMPLEMENTED
 	ObscureStrings = false, --NOT YET IMPLEMENTED
 	ObscureGlobals = false, --NOT YET IMPLEMENTED
 
@@ -1284,7 +1284,7 @@ local RewriterOptions = {
 
 	--== AddJunkCode ==--
 	-- This adds code that serves no purpose functionally
-	AddJunkCode = false, --NOT YET IMPLEMENTED
+	AddJunkCode = false,
 }
 
 -- RewriterOptions helper functions
@@ -1433,7 +1433,21 @@ local function WriteExpression(Expression, Scope)
 		return Base .. Argument
 
 	elseif Expression.AstType == "NumberExpr" then
-		return Expression.Value.Data
+		local NumberValue = tonumber(Expression.Value.Data)
+		if RewriterOptions.ObscureNumbers and tostring(NumberValue) == Expression.Value.Data then
+			local offset = math.random(-10,10)
+			local mode = math.random(1,3)
+			if mode == 1 then
+				return "(" .. tostring(NumberValue-offset) .. "+" .. offset .. ")"
+			elseif mode == 2 then
+				offset = math.abs(offset)
+				return "(" .. tostring(NumberValue-offset) .. "+#\"" .. GenerateRandomString(offset) .. "\")"
+			elseif mode == 3 then
+				return "(" .. tostring(NumberValue-1) .. "+#{\"" .. GenerateRandomString() .. "\"})"
+			end
+		else
+			return Expression.Value.Data
+		end
 
 	elseif Expression.AstType == "StringExpr" then
 		return Expression.Value.Data
@@ -1629,6 +1643,41 @@ local function WriteStatement(Statement, Scope)
 	error("We didn't return on a statement!? " .. tostring(Statement))
 end
 
+--[[
+We can write junk statements in any formatting style we want
+since we use ParseLua to make it into reliable AST data
+--]]
+local JunkStatements = {
+	function()
+		local var = GenerateRandomString()
+		return "if " .. var .. " then " .. var .. "() end"
+	end,
+	function()
+		return "local " .. GenerateRandomString() .. ", " .. GenerateRandomString()
+	end,
+	function()
+		local arg = GenerateRandomString()
+		return "local function "..GenerateRandomString().."("..arg..") return "..GenerateRandomString().."("..arg..") or "..GenerateRandomString().."("..arg..") end"
+	end,
+	function()
+		return "local " .. GenerateRandomString() .. " = " .. math.random(-10,10)
+	end,
+	function()
+		return "local " .. GenerateRandomString() .. " = \"\""
+	end,
+	function()
+		local var = GenerateRandomString()
+		return "while " .. var .. " do " .. var .. " = " .. var .. "() end"
+	end,
+	function()
+		return "getfenv()"
+	end
+}
+local function GenerateJunkCode()
+	local s,r = ParseLua(JunkStatements[math.random(1,#JunkStatements)]())
+	return r.Body[1]
+end
+
 local function StringSplit(str, splitter)
 	local out = {}
 	local s,e,f = string.find(str, "(.-)"..splitter)
@@ -1651,7 +1700,7 @@ end
 WriteStatList = function(StatList, Scope, DontIndent)
 	local out = {}
 	for _,Statement in ipairs(StatList.Body) do
-		if RewriterOptions.AddJunkCode and math.random(1,4) == 1 then
+		if RewriterOptions.AddJunkCode and math.random(1,2) == 1 then
 			local JunkText = StringSplit(WriteStatement(GenerateJunkCode(), Scope) .. ConsiderSemicolon(), "\n")
 			for i = 1,#JunkText do
 				out[#out+1] = JunkText[i]
