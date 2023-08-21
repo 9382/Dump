@@ -1285,6 +1285,10 @@ local RewriterOptions = {
 	--== AddJunkCode ==--
 	-- This adds code that serves no purpose functionally
 	AddJunkCode = false,
+
+	--== JunkCodeChance ==--
+	-- The chance at each statement that junk code is added if enabled
+	JunkCodeChance = 1/3,
 }
 
 -- RewriterOptions helper functions
@@ -1653,7 +1657,7 @@ local JunkStatements = {
 		return "if " .. var .. " then " .. var .. "() end"
 	end,
 	function()
-		return "local " .. GenerateRandomString() .. ", " .. GenerateRandomString()
+		return "local " .. GenerateRandomString()
 	end,
 	function()
 		local arg = GenerateRandomString()
@@ -1668,9 +1672,6 @@ local JunkStatements = {
 	function()
 		local var = GenerateRandomString()
 		return "while " .. var .. " do " .. var .. " = " .. var .. "() end"
-	end,
-	function()
-		return "getfenv()"
 	end
 }
 local function GenerateJunkCode()
@@ -1700,7 +1701,7 @@ end
 WriteStatList = function(StatList, Scope, DontIndent)
 	local out = {}
 	for _,Statement in ipairs(StatList.Body) do
-		if RewriterOptions.AddJunkCode and math.random(1,2) == 1 then
+		if RewriterOptions.AddJunkCode and math.random() < RewriterOptions.JunkCodeChance then
 			local JunkText = StringSplit(WriteStatement(GenerateJunkCode(), Scope) .. ConsiderSemicolon(), "\n")
 			for i = 1,#JunkText do
 				out[#out+1] = JunkText[i]
