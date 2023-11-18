@@ -13,110 +13,110 @@ Really not that hard to decompile given just a decent amount of patience
 return (function(F, n)
 	--All of these are from the `n` table, written here for convenience
 	local M = 2479
-    local I = 628
-    local b = 1803
-    local U = 2305
-    local P = 1431
-    local W = 1614
-    local Q = 820
-    local L = 1836
-    local O = 421
-    local Un = 1364
-    local Vn = 1023
-    local Gn = 2047
-    local Nn = 32
-    local Wn = 21
-    local In = 1272
-    local Hn = 1359
-    local B = 65536
-    local h = 16777216
-    local A = 4
-    local d = 16
-    local u = 3
-    local Mn = 36
-    local c = 256
-    local bn = 1266
-    local sn = 2892
-    local Pn = 2822
-    local wn = 1238
-    local hn = 2787
-    local un = 2735
-    local fn = 2652
-    local rn = 2627
-    local cn = 2538
-    local An = 2451
-    local Dn = 1198
-    local Bn = 1191
-    local Cn = 2421
-    local En = 1162
-    local Fn = 2354
-    local kn = 2314
-    local vn = 1137
-    local Ln = 1132
-    local zn = 1034
-    local pn = 2276
-    local qn = 1031
-    local yn = 967
-    local oo = 913
-    local eo = 895
-    local to = 855
-    local xo = 840
-    local lo = 2264
-    local mn = 2202
-    local no = 833
-    local jn = 762
-    local Yn = 2138
-    local Kn = 679
-    local Tn = 102
-    local On = 1627
-    local Qn = 1599
-    local Zn = 12
-    local Rn = 81
-    local Sn = 120
-    local gn = 478
-    local Xn = 1950
-    local an = 402
-    local Jn = 1867
-    local Z = 308
-    local xn = 1808
-    local p = 1766
-    local X = 1395
-    local R = 1366
-    local Y = 265
-    local S = 1727
-    local i = 222
-    local v = 162
-    local m = 1628
-    local j = 1518
-    local y = 204
-    local q = 1432
-    local K = 586
-    local g = 2063
-    local T = 2005
-    local G = 499
-    local s = 1983
-    local w = 497
-    local D = 1319
-    local E = 355
-    local N = 382
-    local H = 393
-    local V = 489
-    local J = 1247
-    local f = 568
-    local a = 1089
-    local z = 773
-    local nn = 633
-    local C = 725
-    local dn = 1163
-    local x = 0
-    local tn = 801
-    local l = 1038
-    local on = 993
-    local en = 981
-    local ln = 880
-    local e = 2
-    local t = 1
-    local getfenv = (getfenv or function(...)
+	local I = 628
+	local b = 1803
+	local U = 2305
+	local P = 1431
+	local W = 1614
+	local Q = 820
+	local L = 1836
+	local O = 421
+	local Un = 1364
+	local Vn = 1023
+	local Gn = 2047
+	local Nn = 32
+	local Wn = 21
+	local In = 1272
+	local Hn = 1359
+	local B = 65536
+	local h = 16777216
+	local A = 4
+	local d = 16
+	local u = 3
+	local Mn = 36
+	local c = 256
+	local bn = 1266
+	local sn = 2892
+	local Pn = 2822
+	local wn = 1238
+	local hn = 2787
+	local un = 2735
+	local fn = 2652
+	local rn = 2627
+	local cn = 2538
+	local An = 2451
+	local Dn = 1198
+	local Bn = 1191
+	local Cn = 2421
+	local En = 1162
+	local Fn = 2354
+	local kn = 2314
+	local vn = 1137
+	local Ln = 1132
+	local zn = 1034
+	local pn = 2276
+	local qn = 1031
+	local yn = 967
+	local oo = 913
+	local eo = 895
+	local to = 855
+	local xo = 840
+	local lo = 2264
+	local mn = 2202
+	local no = 833
+	local jn = 762
+	local Yn = 2138
+	local Kn = 679
+	local Tn = 102
+	local On = 1627
+	local Qn = 1599
+	local Zn = 12
+	local Rn = 81
+	local Sn = 120
+	local gn = 478
+	local Xn = 1950
+	local an = 402
+	local Jn = 1867
+	local Z = 308
+	local xn = 1808
+	local p = 1766
+	local X = 1395
+	local R = 1366
+	local Y = 265
+	local S = 1727
+	local i = 222
+	local v = 162
+	local m = 1628
+	local j = 1518
+	local y = 204
+	local q = 1432
+	local K = 586
+	local g = 2063
+	local T = 2005
+	local G = 499
+	local s = 1983
+	local w = 497
+	local D = 1319
+	local E = 355
+	local N = 382
+	local H = 393
+	local V = 489
+	local J = 1247
+	local f = 568
+	local a = 1089
+	local z = 773
+	local nn = 633
+	local C = 725
+	local dn = 1163
+	local x = 0
+	local tn = 801
+	local l = 1038
+	local on = 993
+	local en = 981
+	local ln = 880
+	local e = 2
+	local t = 1
+	local getfenv = (getfenv or function(...)
 		return _ENV
 	end)
 	local r, o = "", (getfenv(1))
@@ -426,6 +426,55 @@ return (function(F, n)
 
 				^^^ This is what the VM does when it executes, decoded by hand
 				I've saved myself time by not writing out paths we didn't take and by not doing the self-call stuff (that'd take me years to do by hand!)
+
+				Alternatively, what happened as lua code (kind of, since we ignored seperate paths) with some comments as guidance:
+				```lua
+				--In this lua-translated example, each "scope" has an incrementally higher registry value
+				local reg0 = {}
+				reg0[0] = false
+				if reg0[0] then
+					--[ Undocumented logic ] --not even sure why this exists but its whatever
+				else
+					reg0[0] = {}
+					reg0[1] = nil
+					reg0[1] = function(...)
+						local reg1 = {}
+						local args = {...}
+						for i = 1,select("#", ...) do
+							reg1[i-1] = args[i]
+						end
+						--Note: basically just reg1[0] = args[1] since we don't expect more
+						if reg1[0] <= 1 then
+							--[ Undocumented logic ]
+						else
+							reg1[1] = reg0[0]
+							reg1[1] = reg1[1][reg1[0]] --nums[n]
+							if reg1[1] then
+								--[ Undocumented logic ]
+							else
+								reg1[1] = reg0[0]
+								reg1[2] = reg0[1]
+								reg1[3] = reg1[0] - 1
+								reg1[2] = reg1[2](reg1[3]) --fib(n-1)
+								reg1[3] = reg0[1]
+								reg1[4] = reg1[0] - 2
+								reg1[3] = reg1[3](reg1[4]) --fib(n-2)
+								reg1[2] = reg1[2] + reg1[3]
+								reg1[1][reg1[0]] = reg1[2] --nums[n] = fib(n-1) + fib(n-2)
+								reg1[1] = reg0[0]
+								reg1[1] = reg1[1][reg1[0]]
+								return reg1[1] --return nums[n]
+							end
+						end
+					end
+					reg0[2] = getfenv()["print"]
+					reg0[3] = reg0[1]
+					reg0[4] = 46
+					reg0[3] = reg0[3](reg0[4])
+					reg0[2](reg0[3]) --print(fib(46))
+					return
+				end
+				```
 				--]=]
 
 				--End the statement, return nothing
